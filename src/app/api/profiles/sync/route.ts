@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getFirebaseAdminAuth } from "@/lib/firebase-admin";
+import { ensureLockerForProfile } from "@/lib/lockers";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type SyncBody = {
@@ -57,20 +58,39 @@ export async function POST(request: Request) {
       avatar_url: body.avatarUrl ?? decoded.picture ?? null,
     };
 
-    const { data, error } = await db
+    const { data: profile, error } = await db
       .from("profiles")
       .upsert(payload, { onConflict: "firebase_uid" })
-      .select("*")
+      .select("id, firebase_uid, first_name, last_name, email, role")
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error || !profile) {
+      return NextResponse.json(
+        { error: "Unable to save your profile right now." },
+        { status: 500 },
+      );
     }
 
-    return NextResponse.json({ profile: data });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to sync profile.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const { locker, error: lockerError } = await ensureLockerForProfile(
+      db,
+      profile.id,
+    );
+
+    if (lockerError || !locker) {
+      return NextResponse.json(
+        { error: "Unable to assign your India locker right now." },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      profile,
+      lockerCode: locker.locker_code,
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Unable to sync your account right now." },
+      { status: 500 },
+    );
   }
 }

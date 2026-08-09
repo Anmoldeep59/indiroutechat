@@ -1,10 +1,5 @@
-import { PlaceholderSection } from "@/components/dashboard/PlaceholderSection";
+import { MyLockerView } from "@/components/dashboard/MyLockerView";
 
 export default function LockerPage() {
-  return (
-    <PlaceholderSection
-      title="My Locker"
-      description="Your personal IndiRoute India warehouse address and locker details will appear here once assigned."
-    />
-  );
+  return <MyLockerView />;
 }

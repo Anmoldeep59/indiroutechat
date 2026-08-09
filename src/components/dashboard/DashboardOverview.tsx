@@ -1,9 +1,13 @@
 "use client";
 
+import Link from "next/link";
+import { LockerAddressCard } from "@/components/dashboard/LockerAddressCard";
 import { useAuthState } from "@/hooks/useAuthState";
+import { useMyLocker } from "@/hooks/useMyLocker";
 
 export function DashboardOverview() {
   const { user } = useAuthState();
+  const { locker, loading: lockerLoading, error: lockerError } = useMyLocker();
   const displayName = user?.displayName?.trim() || "there";
 
   return (
@@ -17,60 +21,78 @@ export function DashboardOverview() {
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-muted sm:text-base">
           Manage your India warehouse address, parcels, and shipments from one
-          place. Detailed locker data will appear here as you start receiving
-          packages.
+          place.
         </p>
       </section>
 
-      <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
-          <h3 className="font-display text-sm font-semibold text-brand">
-            My India Address
-          </h3>
-          <p className="mt-3 text-sm leading-relaxed text-brand-muted">
-            Your personal IndiRoute warehouse address will appear here after
-            locker assignment.
-          </p>
-          <p className="mt-4 font-display text-xs font-semibold uppercase tracking-wide text-accent">
-            Pending assignment
-          </p>
-        </article>
+      <section className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+        <div>
+          {lockerLoading ? (
+            <div className="rounded-xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
+              <div
+                className="h-8 w-8 animate-spin rounded-full border-2 border-brand/20 border-t-accent"
+                aria-hidden="true"
+              />
+              <p className="mt-3 text-sm font-semibold text-brand">
+                Loading your India address...
+              </p>
+            </div>
+          ) : locker ? (
+            <LockerAddressCard locker={locker} compact />
+          ) : (
+            <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
+              <h3 className="font-display text-sm font-semibold text-brand">
+                My India Address
+              </h3>
+              <p className="mt-3 text-sm leading-relaxed text-brand-muted">
+                {lockerError ||
+                  "Your locker is not ready yet. Please refresh or open My Locker."}
+              </p>
+              <Link
+                href="/dashboard/locker"
+                className="mt-4 inline-flex text-sm font-semibold text-accent hover:text-accent-hover"
+              >
+                Go to My Locker
+              </Link>
+            </article>
+          )}
+        </div>
 
-        <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
-          <h3 className="font-display text-sm font-semibold text-brand">
-            Incoming Parcels
-          </h3>
-          <p className="mt-3 font-display text-3xl font-bold tracking-tight text-brand">
-            —
-          </p>
-          <p className="mt-2 text-sm text-brand-muted">
-            Parcels currently heading to your locker.
-          </p>
-        </article>
-
-        <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
-          <h3 className="font-display text-sm font-semibold text-brand">
-            Ready to Ship
-          </h3>
-          <p className="mt-3 font-display text-3xl font-bold tracking-tight text-brand">
-            —
-          </p>
-          <p className="mt-2 text-sm text-brand-muted">
-            Packages waiting for consolidation or dispatch.
-          </p>
-        </article>
-
-        <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
-          <h3 className="font-display text-sm font-semibold text-brand">
-            Active Shipments
-          </h3>
-          <p className="mt-3 font-display text-3xl font-bold tracking-tight text-brand">
-            —
-          </p>
-          <p className="mt-2 text-sm text-brand-muted">
-            International shipments currently in transit.
-          </p>
-        </article>
+        <div className="grid gap-5 sm:grid-cols-3 lg:grid-cols-1">
+          <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
+            <h3 className="font-display text-sm font-semibold text-brand">
+              Incoming Parcels
+            </h3>
+            <p className="mt-3 font-display text-3xl font-bold tracking-tight text-brand">
+              —
+            </p>
+            <p className="mt-2 text-sm text-brand-muted">
+              Parcels heading to your locker.
+            </p>
+          </article>
+          <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
+            <h3 className="font-display text-sm font-semibold text-brand">
+              Ready to Ship
+            </h3>
+            <p className="mt-3 font-display text-3xl font-bold tracking-tight text-brand">
+              —
+            </p>
+            <p className="mt-2 text-sm text-brand-muted">
+              Packages waiting to dispatch.
+            </p>
+          </article>
+          <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
+            <h3 className="font-display text-sm font-semibold text-brand">
+              Active Shipments
+            </h3>
+            <p className="mt-3 font-display text-3xl font-bold tracking-tight text-brand">
+              —
+            </p>
+            <p className="mt-2 text-sm text-brand-muted">
+              Shipments currently in transit.
+            </p>
+          </article>
+        </div>
       </section>
 
       <section className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
@@ -94,28 +116,27 @@ export function DashboardOverview() {
             Quick Actions
           </h3>
           <p className="mt-3 text-sm leading-relaxed text-brand-muted">
-            Shortcuts for shipping, consolidation, and pickup will become active
-            as those tools go live.
+            Common shortcuts for your IndiRoute account.
           </p>
           <div className="mt-5 flex flex-col gap-2.5">
-            <a
+            <Link
               href="/dashboard/shipping-calculator"
               className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-brand transition-colors hover:border-brand/30"
             >
               Calculate Shipping
-            </a>
-            <a
+            </Link>
+            <Link
               href="/dashboard/consolidation"
               className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-brand transition-colors hover:border-brand/30"
             >
               Request Consolidation
-            </a>
-            <a
+            </Link>
+            <Link
               href="/dashboard/locker"
               className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent/10 px-4 text-sm font-semibold text-accent transition-colors hover:bg-accent/15"
             >
               View India Address
-            </a>
+            </Link>
           </div>
         </article>
       </section>
