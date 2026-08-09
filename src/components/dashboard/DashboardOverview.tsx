@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LockerAddressCard } from "@/components/dashboard/LockerAddressCard";
+import { ParcelTimeline } from "@/components/dashboard/ParcelTimeline";
+import { ConveyorBelt, IndiaMap, LockerRack } from "@/components/illustrations";
 import { useAuthState } from "@/hooks/useAuthState";
 import { useMyLocker } from "@/hooks/useMyLocker";
 
@@ -58,7 +60,12 @@ export function DashboardOverview() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)] sm:p-7">
+      <section className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6 shadow-[0_1px_3px_rgba(12,35,64,0.05)] sm:p-7">
+        <div
+          className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-accent/[0.07] blur-2xl"
+          aria-hidden="true"
+        />
+        <IndiaMap className="pointer-events-none absolute -bottom-6 right-6 hidden h-32 w-auto text-brand opacity-70 sm:block" />
         <p className="font-display text-xs font-semibold uppercase tracking-[0.14em] text-accent">
           Overview
         </p>
@@ -105,7 +112,7 @@ export function DashboardOverview() {
         </div>
 
         <div className="grid gap-5 sm:grid-cols-3 lg:grid-cols-1">
-          <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
+          <article className="card-lift animate-fade-up animation-delay-100 rounded-2xl border border-border bg-surface p-5 shadow-[0_1px_3px_rgba(12,35,64,0.05)]">
             <h3 className="font-display text-sm font-semibold text-brand">
               Incoming Parcels
             </h3>
@@ -122,7 +129,7 @@ export function DashboardOverview() {
               View parcels
             </Link>
           </article>
-          <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
+          <article className="card-lift animate-fade-up animation-delay-200 rounded-2xl border border-border bg-surface p-5 shadow-[0_1px_3px_rgba(12,35,64,0.05)]">
             <h3 className="font-display text-sm font-semibold text-brand">
               Ready to Ship
             </h3>
@@ -133,7 +140,7 @@ export function DashboardOverview() {
               Packages waiting to dispatch.
             </p>
           </article>
-          <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
+          <article className="card-lift animate-fade-up animation-delay-300 rounded-2xl border border-border bg-surface p-5 shadow-[0_1px_3px_rgba(12,35,64,0.05)]">
             <h3 className="font-display text-sm font-semibold text-brand">
               Active Shipments
             </h3>
@@ -147,15 +154,21 @@ export function DashboardOverview() {
         </div>
       </section>
 
+      <ParcelTimeline activeIndex={incomingCount && incomingCount > 0 ? 0 : -1} />
+
       <section className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-        <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)] sm:p-6">
+        <article className="rounded-2xl border border-border bg-surface p-5 shadow-[0_1px_3px_rgba(12,35,64,0.05)] sm:p-6">
           <h3 className="font-display text-lg font-semibold tracking-tight text-brand">
-            Recent Activity
+            Warehouse floor
           </h3>
-          <p className="mt-3 text-sm leading-relaxed text-brand-muted">
-            Parcel updates, shipment tracking, and account notices will show up
-            here.
+          <p className="mt-2 text-sm leading-relaxed text-brand-muted">
+            Your parcels move across racks, scanners, and packing stations
+            before international dispatch.
           </p>
+          <div className="mt-5 flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
+            <LockerRack className="h-36 w-auto" />
+            <ConveyorBelt className="h-16 w-auto opacity-90" />
+          </div>
           <ul className="mt-5 space-y-3">
             <li className="rounded-lg border border-dashed border-border bg-background px-4 py-3 text-sm text-brand-muted">
               No recent activity yet.
@@ -163,7 +176,7 @@ export function DashboardOverview() {
           </ul>
         </article>
 
-        <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)] sm:p-6">
+        <article className="rounded-2xl border border-border bg-surface p-5 shadow-[0_1px_3px_rgba(12,35,64,0.05)] sm:p-6">
           <h3 className="font-display text-lg font-semibold tracking-tight text-brand">
             Quick Actions
           </h3>
@@ -173,19 +186,19 @@ export function DashboardOverview() {
           <div className="mt-5 flex flex-col gap-2.5">
             <Link
               href="/dashboard/shipping-calculator"
-              className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-brand transition-colors hover:border-brand/30"
+              className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-brand transition-all duration-200 hover:border-brand/30 hover:shadow-sm motion-safe:hover:-translate-y-0.5"
             >
               Calculate Shipping
             </Link>
             <Link
               href="/dashboard/consolidation"
-              className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-brand transition-colors hover:border-brand/30"
+              className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-brand transition-all duration-200 hover:border-brand/30 hover:shadow-sm motion-safe:hover:-translate-y-0.5"
             >
               Request Consolidation
             </Link>
             <Link
               href="/dashboard/locker"
-              className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent/10 px-4 text-sm font-semibold text-accent transition-colors hover:bg-accent/15"
+              className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent/10 px-4 text-sm font-semibold text-accent transition-all duration-200 hover:bg-accent/15 hover:shadow-sm motion-safe:hover:-translate-y-0.5"
             >
               View India Address
             </Link>

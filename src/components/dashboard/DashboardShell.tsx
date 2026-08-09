@@ -32,13 +32,19 @@ function DashboardNav({ pathname, onNavigate }: DashboardNavProps) {
             key={item.id}
             href={item.href}
             onClick={onNavigate}
-            className={`rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+            className={`relative rounded-md py-2.5 pl-4 pr-3 text-sm font-medium transition-all duration-200 ${
               isActive
                 ? "bg-white/10 text-white"
-                : "text-white/75 hover:bg-white/5 hover:text-white"
+                : "text-white/70 hover:bg-white/5 hover:text-white motion-safe:hover:translate-x-0.5"
             }`}
             aria-current={isActive ? "page" : undefined}
           >
+            <span
+              className={`absolute bottom-2 left-0 top-2 w-0.5 rounded-full bg-accent transition-opacity duration-200 ${
+                isActive ? "opacity-100" : "opacity-0"
+              }`}
+              aria-hidden="true"
+            />
             {item.label}
           </Link>
         );
@@ -70,15 +76,24 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
 
   return (
     <div className="flex min-h-full flex-1 bg-background">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-brand lg:flex">
-        <div className="border-b border-white/10 px-5 py-5">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-gradient-to-b from-brand to-brand-deep lg:flex">
+        <div className="pattern-jaali pointer-events-none absolute inset-0" aria-hidden="true" />
+        <div className="relative border-b border-white/10 px-5 py-5">
           <Logo tone="on-dark" />
           <p className="mt-2 text-xs font-medium tracking-wide text-white/55">
             Customer Dashboard
           </p>
         </div>
-        <div className="flex-1 overflow-y-auto px-3 py-4">
+        <div className="relative flex-1 overflow-y-auto px-3 py-4">
           <DashboardNav pathname={pathname} />
+        </div>
+        <div
+          className="relative border-t border-white/10 px-5 py-4"
+          aria-hidden="true"
+        >
+          <p className="text-xs font-medium tracking-wide text-white/40">
+            Shop India. Ship Anywhere.
+          </p>
         </div>
       </aside>
 
@@ -90,7 +105,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
             aria-label="Close menu"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="relative flex h-full w-[min(18rem,85vw)] flex-col bg-brand shadow-xl">
+          <aside className="animate-drawer-in relative flex h-full w-[min(18rem,85vw)] flex-col bg-gradient-to-b from-brand to-brand-deep shadow-xl">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
               <Logo tone="on-dark" />
               <button
@@ -181,7 +196,9 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
         </header>
 
         <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-          {children}
+          <div key={pathname} className="animate-fade-up">
+            {children}
+          </div>
         </main>
       </div>
     </div>

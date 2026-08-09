@@ -8,7 +8,11 @@ export function PlaceholderSection({
   description,
 }: PlaceholderSectionProps) {
   return (
-    <section className="rounded-xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)] sm:p-8">
+    <section className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6 shadow-[0_1px_3px_rgba(12,35,64,0.05)] sm:p-8">
+      <div
+        className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-accent/[0.06] blur-2xl"
+        aria-hidden="true"
+      />
       <p className="font-display text-xs font-semibold uppercase tracking-[0.14em] text-accent">
         Customer dashboard
       </p>

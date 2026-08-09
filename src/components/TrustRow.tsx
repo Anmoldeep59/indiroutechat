@@ -1,3 +1,5 @@
+import { Reveal } from "./Reveal";
+
 const trustItems = [
   {
     title: "Global Shipping",
@@ -97,22 +99,21 @@ export function TrustRow() {
       aria-label="Why IndiRoute"
       className="border-t border-border bg-surface"
     >
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:gap-8 lg:px-8 lg:py-14">
-        {trustItems.map((item) => (
-          <div
-            key={item.title}
-            className={`animate-fade-in ${item.delayClass} flex flex-col gap-3`}
-          >
-            <div className="flex h-10 w-10 items-center justify-center text-trust-icon">
-              {item.icon}
+      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:gap-6 lg:px-8 lg:py-16">
+        {trustItems.map((item, index) => (
+          <Reveal key={item.title} delay={index * 90}>
+            <div className="group flex h-full flex-col gap-3 rounded-2xl p-4 transition-colors duration-300 hover:bg-brand/[0.025]">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand/[0.06] text-trust-icon transition-all duration-300 group-hover:bg-accent/10 group-hover:text-accent motion-safe:group-hover:-translate-y-0.5">
+                {item.icon}
+              </div>
+              <h2 className="font-display text-base font-semibold tracking-tight text-brand">
+                {item.title}
+              </h2>
+              <p className="text-sm leading-relaxed text-brand-muted">
+                {item.description}
+              </p>
             </div>
-            <h2 className="font-display text-base font-semibold tracking-tight text-brand">
-              {item.title}
-            </h2>
-            <p className="text-sm leading-relaxed text-brand-muted">
-              {item.description}
-            </p>
-          </div>
+          </Reveal>
         ))}
       </div>
     </section>

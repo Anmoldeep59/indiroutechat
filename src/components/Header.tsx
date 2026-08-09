@@ -35,10 +35,31 @@ export function Header() {
   }, [menuOpen]);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/70 bg-background/90 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 shadow-[0_1px_12px_rgba(12,35,64,0.05)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent"
+        aria-hidden="true"
+      />
       <div className="mx-auto grid h-16 max-w-6xl grid-cols-[1fr_auto] items-center gap-4 px-4 sm:px-6 md:grid-cols-[1fr_auto_1fr] lg:px-8">
         <div className="justify-self-start">
-          <Logo />
+          <div className="flex items-center gap-2.5">
+            <Logo />
+            <svg
+              viewBox="0 0 48 16"
+              className="hidden h-3 w-12 text-accent opacity-70 md:block"
+              aria-hidden="true"
+            >
+              <path
+                d="M2 12C14 4 30 4 46 8"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                className="route-line"
+              />
+              <circle cx="46" cy="8" r="2.5" fill="currentColor" className="route-node" />
+            </svg>
+          </div>
         </div>
 
         <nav
@@ -121,7 +142,7 @@ export function Header() {
       {menuOpen ? (
         <div
           id="mobile-menu"
-          className="border-t border-border/70 bg-background md:hidden"
+          className="animate-menu-in border-t border-border/70 bg-background md:hidden"
         >
           <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6">
             <nav className="flex flex-col gap-0.5" aria-label="Mobile">

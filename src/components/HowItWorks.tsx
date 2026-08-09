@@ -1,3 +1,19 @@
+import type { ReactNode } from "react";
+import {
+  AddressCardVisual,
+  DeliveryVisual,
+  ShoppingVisual,
+  WarehouseStepVisual,
+} from "./illustrations";
+import { MotionReveal } from "./Motion";
+
+const stepVisuals: Record<string, ReactNode> = {
+  "01": <AddressCardVisual className="h-24 w-auto" />,
+  "02": <ShoppingVisual className="h-24 w-auto" />,
+  "03": <WarehouseStepVisual className="h-24 w-auto" />,
+  "04": <DeliveryVisual className="h-24 w-auto" />,
+};
+
 const steps = [
   {
     number: "01",
@@ -101,20 +117,25 @@ export function HowItWorks() {
       aria-labelledby="how-it-works-heading"
       className="scroll-mt-20 border-t border-border bg-background"
     >
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2
-            id="how-it-works-heading"
-            className="font-display text-3xl font-bold tracking-tight text-brand sm:text-4xl"
-          >
-            How IndiRoute Works
-          </h2>
-          <p className="mt-4 text-base leading-relaxed text-brand-muted sm:text-lg">
-            Shop from Indian stores and receive your products anywhere in the
-            world — IndiRoute handles the warehouse address, storage, and
-            international shipping for you.
-          </p>
-        </div>
+      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+        <MotionReveal>
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="font-display text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+              Simple process
+            </p>
+            <h2
+              id="how-it-works-heading"
+              className="mt-3 font-display text-3xl font-bold tracking-tight text-brand sm:text-4xl"
+            >
+              How IndiRoute Works
+            </h2>
+            <p className="mt-4 text-base leading-relaxed text-brand-muted sm:text-lg">
+              Shop from Indian stores and receive your products anywhere in the
+              world — IndiRoute handles the warehouse address, storage, and
+              international shipping for you.
+            </p>
+          </div>
+        </MotionReveal>
 
         <div className="relative mt-12 sm:mt-14 lg:mt-16">
           <div
@@ -123,27 +144,30 @@ export function HowItWorks() {
           />
 
           <ol className="relative grid gap-6 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
-            {steps.map((step) => (
-              <li
-                key={step.number}
-                className="relative flex flex-col rounded-xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand/[0.06] text-brand">
-                    {step.icon}
+            {steps.map((step, index) => (
+              <MotionReveal key={step.number} delay={index * 100} className="h-full">
+                <li className="card-lift group relative flex h-full flex-col rounded-2xl border border-border bg-surface p-6 shadow-[0_1px_3px_rgba(12,35,64,0.05)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand/[0.06] text-brand transition-colors duration-300 group-hover:bg-accent/10 group-hover:text-accent">
+                      {step.icon}
+                    </div>
+                    <span className="font-display text-sm font-bold tracking-wider text-accent">
+                      {step.number}
+                    </span>
                   </div>
-                  <span className="font-display text-sm font-bold tracking-wider text-accent">
-                    {step.number}
-                  </span>
-                </div>
 
-                <h3 className="mt-5 font-display text-lg font-semibold tracking-tight text-brand">
-                  {step.title}
-                </h3>
-                <p className="mt-2.5 text-sm leading-relaxed text-brand-muted">
-                  {step.description}
-                </p>
-              </li>
+                  <div className="mt-5 flex h-24 items-center justify-center rounded-xl bg-background/80">
+                    {stepVisuals[step.number]}
+                  </div>
+
+                  <h3 className="mt-5 font-display text-lg font-semibold tracking-tight text-brand">
+                    {step.title}
+                  </h3>
+                  <p className="mt-2.5 text-sm leading-relaxed text-brand-muted">
+                    {step.description}
+                  </p>
+                </li>
+              </MotionReveal>
             ))}
           </ol>
         </div>

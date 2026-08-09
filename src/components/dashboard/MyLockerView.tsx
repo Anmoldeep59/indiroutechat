@@ -1,6 +1,7 @@
 "use client";
 
 import { LockerAddressCard } from "@/components/dashboard/LockerAddressCard";
+import { LockerRack, WarehouseIllustration } from "@/components/illustrations";
 import { useMyLocker } from "@/hooks/useMyLocker";
 
 export function MyLockerView() {
@@ -43,7 +44,11 @@ export function MyLockerView() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)] sm:p-8">
+      <section className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6 shadow-[0_1px_3px_rgba(12,35,64,0.05)] sm:p-8">
+        <div
+          className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-accent/[0.06] blur-2xl"
+          aria-hidden="true"
+        />
         <p className="font-display text-xs font-semibold uppercase tracking-[0.14em] text-accent">
           My Locker
         </p>
@@ -56,26 +61,44 @@ export function MyLockerView() {
         </p>
       </section>
 
-      <LockerAddressCard locker={locker} />
+      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <LockerAddressCard locker={locker} />
 
-      <section className="rounded-xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
-        <h2 className="font-display text-lg font-semibold text-brand">
-          How to use your locker
-        </h2>
-        <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-brand-muted">
-          <li>Copy your full India delivery address.</li>
-          <li>
-            Paste it as the shipping address on Indian store checkouts.
-          </li>
-          <li>
-            Make sure your locker code ({locker.lockerCode}) appears in the
-            address or recipient name field.
-          </li>
-          <li>
-            After your parcel arrives at IndiRoute, it will show up under My
-            Parcels.
-          </li>
-        </ol>
+        <section
+          className="flex flex-col items-center justify-center rounded-2xl border border-border bg-surface p-6 shadow-[0_1px_3px_rgba(12,35,64,0.05)]"
+          aria-hidden="true"
+        >
+          <LockerRack className="h-40 w-auto" />
+          <p className="mt-4 text-center text-xs font-medium text-brand-muted">
+            Your locker is your personal shelf at the IndiRoute warehouse —
+            every parcel with your code lands here.
+          </p>
+        </section>
+      </div>
+
+      <section className="rounded-2xl border border-border bg-surface p-6 shadow-[0_1px_3px_rgba(12,35,64,0.05)]">
+        <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-brand">
+              How to use your locker
+            </h2>
+            <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-brand-muted">
+              <li>Copy your full India delivery address.</li>
+              <li>
+                Paste it as the shipping address on Indian store checkouts.
+              </li>
+              <li>
+                Make sure your locker code ({locker.lockerCode}) appears in the
+                address or recipient name field.
+              </li>
+              <li>
+                After your parcel arrives at IndiRoute, it will show up under My
+                Parcels.
+              </li>
+            </ol>
+          </div>
+          <WarehouseIllustration className="mx-auto hidden h-36 w-auto lg:block" />
+        </div>
       </section>
     </div>
   );

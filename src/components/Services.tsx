@@ -1,3 +1,19 @@
+import type { ReactNode } from "react";
+import {
+  ConsolidationVisual,
+  GlobeRoute,
+  PickupVan,
+  ShopFront,
+} from "./illustrations";
+import { MotionReveal } from "./Motion";
+
+const serviceVisuals: Record<string, ReactNode> = {
+  "Parcel Forwarding": <GlobeRoute className="h-20 w-auto" />,
+  "Assisted Purchase": <ShopFront className="h-20 w-auto" />,
+  "Parcel Consolidation": <ConsolidationVisual className="h-20 w-auto" />,
+  "India Pickup": <PickupVan className="h-20 w-auto" />,
+};
+
 const services = [
   {
     title: "Parcel Forwarding",
@@ -92,36 +108,45 @@ export function Services() {
       aria-labelledby="services-heading"
       className="scroll-mt-20 border-t border-border bg-surface"
     >
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2
-            id="services-heading"
-            className="font-display text-3xl font-bold tracking-tight text-brand sm:text-4xl"
-          >
-            Our Services
-          </h2>
-          <p className="mt-4 text-base leading-relaxed text-brand-muted sm:text-lg">
-            IndiRoute helps customers shop, receive, combine, and ship products
-            from India to destinations worldwide.
-          </p>
-        </div>
+      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+        <MotionReveal>
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="font-display text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+              What we do
+            </p>
+            <h2
+              id="services-heading"
+              className="mt-3 font-display text-3xl font-bold tracking-tight text-brand sm:text-4xl"
+            >
+              Our Services
+            </h2>
+            <p className="mt-4 text-base leading-relaxed text-brand-muted sm:text-lg">
+              IndiRoute helps customers shop, receive, combine, and ship products
+              from India to destinations worldwide.
+            </p>
+          </div>
+        </MotionReveal>
 
         <ul className="mt-12 grid gap-5 sm:mt-14 sm:grid-cols-2 sm:gap-6 lg:mt-16 lg:grid-cols-4 lg:gap-5">
-          {services.map((service) => (
-            <li
-              key={service.title}
-              className="group flex flex-col rounded-xl border border-border bg-background p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/35 hover:shadow-[0_8px_24px_rgba(12,35,64,0.08)]"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand/[0.06] text-brand transition-colors duration-200 group-hover:bg-accent/10 group-hover:text-accent">
-                {service.icon}
-              </div>
-              <h3 className="mt-5 font-display text-lg font-semibold tracking-tight text-brand">
-                {service.title}
-              </h3>
-              <p className="mt-2.5 text-sm leading-relaxed text-brand-muted">
-                {service.description}
-              </p>
-            </li>
+          {services.map((service, index) => (
+            <MotionReveal key={service.title} delay={index * 100} className="h-full">
+              <li className="card-lift group flex h-full flex-col rounded-2xl border border-border bg-background p-6 shadow-[0_1px_3px_rgba(12,35,64,0.05)]">
+                <div className="flex h-24 items-center justify-center rounded-xl bg-surface transition-colors duration-300 group-hover:bg-accent/[0.04]">
+                  {serviceVisuals[service.title]}
+                </div>
+                <div className="mt-5 flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/[0.06] text-brand transition-colors duration-300 group-hover:bg-accent/10 group-hover:text-accent">
+                    {service.icon}
+                  </div>
+                  <h3 className="font-display text-lg font-semibold tracking-tight text-brand">
+                    {service.title}
+                  </h3>
+                </div>
+                <p className="mt-2.5 text-sm leading-relaxed text-brand-muted">
+                  {service.description}
+                </p>
+              </li>
+            </MotionReveal>
           ))}
         </ul>
       </div>

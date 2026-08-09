@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BarcodeDecor, IndiaMap } from "./illustrations";
 import { Logo } from "./Logo";
 import { NewsletterForm } from "./NewsletterForm";
 
@@ -81,8 +82,17 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="bg-brand text-white">
-      <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
+    <footer className="relative overflow-hidden bg-gradient-to-b from-brand to-brand-deep text-white">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/60 to-transparent"
+        aria-hidden="true"
+      />
+      <div className="pattern-jaali pointer-events-none absolute inset-0" aria-hidden="true" />
+      <div
+        className="pointer-events-none absolute -right-24 top-0 h-72 w-72 rounded-full bg-accent/[0.07] blur-3xl"
+        aria-hidden="true"
+      />
+      <div className="relative mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
         <div className="grid gap-12 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1.85fr)] lg:gap-16">
           <div className="max-w-md">
             <Logo tone="on-dark" />
@@ -104,7 +114,7 @@ export function Footer() {
                     <li key={link.label}>
                       <Link
                         href={link.href}
-                        className="text-sm text-white/80 transition-colors hover:text-white"
+                        className="inline-block text-sm text-white/75 transition-all duration-200 hover:text-white motion-safe:hover:translate-x-0.5"
                       >
                         {link.label}
                       </Link>
@@ -116,7 +126,43 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col gap-5 border-t border-white/15 pt-8 sm:mt-14 sm:flex-row sm:items-center sm:justify-between">
+        {/* India → world band */}
+        <div className="mt-12 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] sm:mt-14">
+          <div className="flex flex-col items-center gap-6 px-6 py-8 sm:flex-row sm:justify-between sm:px-8">
+            <div className="flex items-center gap-5">
+              <IndiaMap className="h-20 w-auto text-white" />
+              <svg viewBox="0 0 120 40" className="hidden h-10 w-28 sm:block" aria-hidden="true">
+                <path
+                  d="M2 20h108"
+                  stroke="#e86a17"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  className="route-line"
+                />
+                <path d="M104 14l12 6-12 6z" fill="#e86a17" />
+              </svg>
+              <div className="hidden items-center gap-2.5 sm:flex" aria-hidden="true">
+                {["#e86a17", "#ffffff", "#147a54", "#d4a017", "#e86a17"].map(
+                  (color, i) => (
+                    <span
+                      key={i}
+                      className="route-node inline-block h-2 w-2 rounded-full"
+                      style={{ backgroundColor: color, opacity: 0.85, animationDelay: `${i * 0.4}s` }}
+                    />
+                  ),
+                )}
+              </div>
+            </div>
+            <div className="text-center sm:text-right">
+              <p className="font-display text-lg font-bold tracking-tight text-white sm:text-xl">
+                India, delivered to the world.
+              </p>
+              <BarcodeDecor className="ml-auto mt-3 hidden h-7 w-auto text-white/30 sm:block" />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-10 flex flex-col gap-5 border-t border-white/15 pt-8 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-white/65">
             © {year} IndiRoute. All rights reserved.
           </p>
@@ -127,7 +173,7 @@ export function Footer() {
                 <a
                   href={social.href}
                   aria-label={social.label}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/15 text-white/80 transition-colors hover:border-accent/60 hover:bg-white/5 hover:text-white"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/15 text-white/80 transition-all duration-200 hover:border-accent/60 hover:bg-accent/15 hover:text-white motion-safe:hover:-translate-y-0.5"
                 >
                   {social.icon}
                 </a>

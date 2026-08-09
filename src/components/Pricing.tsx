@@ -1,26 +1,37 @@
+import { PostalStamp, RangoliMotif } from "./illustrations";
+import { Reveal } from "./Reveal";
+
 export function Pricing() {
   return (
     <section
       id="pricing"
       aria-labelledby="pricing-heading"
-      className="scroll-mt-20 border-t border-border bg-surface"
+      className="relative scroll-mt-20 overflow-hidden border-t border-border bg-surface"
     >
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2
-            id="pricing-heading"
-            className="font-display text-3xl font-bold tracking-tight text-brand sm:text-4xl"
-          >
-            Simple, Transparent Pricing
-          </h2>
-          <p className="mt-4 text-base leading-relaxed text-brand-muted sm:text-lg">
-            Pay only for the services you use — no hidden fees, no confusing
-            packages.
-          </p>
-        </div>
+      <PostalStamp className="pointer-events-none absolute -right-6 top-10 hidden h-36 w-auto rotate-[8deg] opacity-40 lg:block" />
+      <RangoliMotif className="pointer-events-none absolute -bottom-28 -left-24 h-72 w-72 text-brand opacity-[0.04]" />
+      <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+        <Reveal>
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="font-display text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+              Pricing
+            </p>
+            <h2
+              id="pricing-heading"
+              className="mt-3 font-display text-3xl font-bold tracking-tight text-brand sm:text-4xl"
+            >
+              Simple, Transparent Pricing
+            </h2>
+            <p className="mt-4 text-base leading-relaxed text-brand-muted sm:text-lg">
+              Pay only for the services you use — no hidden fees, no confusing
+              packages.
+            </p>
+          </div>
+        </Reveal>
 
         <ul className="mt-12 grid gap-5 sm:mt-14 sm:grid-cols-2 sm:gap-6 lg:mt-16 lg:grid-cols-3 lg:gap-6">
-          <li className="flex flex-col rounded-xl border border-border bg-background p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)] sm:p-7">
+          <Reveal className="h-full sm:col-span-1">
+          <li className="card-lift flex h-full flex-col rounded-2xl border border-border bg-background p-6 shadow-[0_1px_3px_rgba(12,35,64,0.05)] sm:p-7">
             <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-brand/[0.06] text-brand">
               <svg
                 className="h-5 w-5"
@@ -61,8 +72,10 @@ export function Pricing() {
               Storage charges may depend on parcel/locker policy.
             </p>
           </li>
+          </Reveal>
 
-          <li className="flex flex-col rounded-xl border border-border bg-background p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)] sm:p-7">
+          <Reveal className="h-full sm:col-span-1" delay={100}>
+          <li className="card-lift flex h-full flex-col rounded-2xl border border-border bg-background p-6 shadow-[0_1px_3px_rgba(12,35,64,0.05)] sm:p-7">
             <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-brand/[0.06] text-brand">
               <svg
                 className="h-5 w-5"
@@ -93,8 +106,10 @@ export function Pricing() {
               Pricing shown before confirmation
             </p>
           </li>
+          </Reveal>
 
-          <li className="flex flex-col rounded-xl border border-border bg-background p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)] sm:col-span-2 sm:p-7 lg:col-span-1">
+          <Reveal className="h-full sm:col-span-2 lg:col-span-1" delay={200}>
+          <li className="card-lift flex h-full flex-col rounded-2xl border border-border bg-background p-6 shadow-[0_1px_3px_rgba(12,35,64,0.05)] sm:p-7">
             <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-brand/[0.06] text-brand">
               <svg
                 className="h-5 w-5"
@@ -123,12 +138,18 @@ export function Pricing() {
 
             <a
               href="#shipping-calculator"
-              className="mt-auto inline-flex w-fit items-center gap-1.5 pt-5 text-sm font-semibold text-accent transition-colors hover:text-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="group/link mt-auto inline-flex w-fit items-center gap-1.5 pt-5 text-sm font-semibold text-accent transition-colors hover:text-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               Calculate Shipping
-              <span aria-hidden="true">→</span>
+              <span
+                aria-hidden="true"
+                className="transition-transform duration-200 motion-safe:group-hover/link:translate-x-1"
+              >
+                →
+              </span>
             </a>
           </li>
+          </Reveal>
         </ul>
       </div>
     </section>
