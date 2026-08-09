@@ -5,26 +5,26 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { signOut, type User } from "firebase/auth";
 import { Logo } from "@/components/Logo";
-import { dashboardNavItems } from "@/components/dashboard/nav";
+import { adminNavItems } from "@/components/admin/nav";
 import { auth } from "@/lib/firebase";
 
-type DashboardShellProps = {
+type AdminShellProps = {
   user: User;
   children: ReactNode;
 };
 
-type DashboardNavProps = {
+type AdminNavProps = {
   pathname: string;
   onNavigate?: () => void;
 };
 
-function DashboardNav({ pathname, onNavigate }: DashboardNavProps) {
+function AdminNav({ pathname, onNavigate }: AdminNavProps) {
   return (
-    <nav aria-label="Dashboard" className="flex flex-col gap-0.5">
-      {dashboardNavItems.map((item) => {
+    <nav aria-label="Admin" className="flex flex-col gap-0.5">
+      {adminNavItems.map((item) => {
         const isActive =
-          item.href === "/dashboard"
-            ? pathname === "/dashboard"
+          item.href === "/admin"
+            ? pathname === "/admin"
             : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
         return (
@@ -47,18 +47,14 @@ function DashboardNav({ pathname, onNavigate }: DashboardNavProps) {
   );
 }
 
-export function DashboardShell({ user, children }: DashboardShellProps) {
+export function AdminShell({ user, children }: AdminShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  const displayName = user.displayName?.trim() || "IndiRoute Customer";
-  const email = user.email ?? "No email on file";
-
   async function handleSignOut() {
     if (isSigningOut) return;
-
     setIsSigningOut(true);
     try {
       await signOut(auth);
@@ -73,12 +69,12 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-brand lg:flex">
         <div className="border-b border-white/10 px-5 py-5">
           <Logo tone="on-dark" />
-          <p className="mt-2 text-xs font-medium tracking-wide text-white/55">
-            Customer Dashboard
+          <p className="mt-2 text-xs font-medium tracking-wide text-accent">
+            Admin Panel
           </p>
         </div>
         <div className="flex-1 overflow-y-auto px-3 py-4">
-          <DashboardNav pathname={pathname} />
+          <AdminNav pathname={pathname} />
         </div>
       </aside>
 
@@ -99,24 +95,11 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
                 className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white hover:bg-white/10"
                 aria-label="Close menu"
               >
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+                ×
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-3 py-4">
-              <DashboardNav
+              <AdminNav
                 pathname={pathname}
                 onNavigate={() => setMobileOpen(false)}
               />
@@ -133,30 +116,16 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
                 type="button"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-md text-brand hover:bg-brand/[0.05] lg:hidden"
                 aria-label="Open menu"
-                aria-expanded={mobileOpen}
                 onClick={() => setMobileOpen(true)}
               >
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                </svg>
+                ☰
               </button>
               <div>
                 <p className="font-display text-sm font-semibold text-brand sm:text-base">
-                  Dashboard
+                  Administration
                 </p>
                 <p className="hidden text-xs text-brand-muted sm:block">
-                  Shop India. Ship Anywhere.
+                  Secure IndiRoute operations console
                 </p>
               </div>
             </div>
@@ -164,15 +133,17 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="min-w-0 text-right">
                 <p className="truncate font-display text-sm font-semibold text-brand">
-                  {displayName}
+                  {user.displayName || "Admin"}
                 </p>
-                <p className="truncate text-xs text-brand-muted">{email}</p>
+                <p className="truncate text-xs text-brand-muted">
+                  {user.email}
+                </p>
               </div>
               <button
                 type="button"
                 onClick={handleSignOut}
                 disabled={isSigningOut}
-                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md border border-border bg-background px-3.5 text-sm font-semibold text-brand transition-colors hover:border-brand/30 hover:bg-brand/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md border border-border bg-background px-3.5 text-sm font-semibold text-brand transition-colors hover:border-brand/30 disabled:opacity-60"
               >
                 {isSigningOut ? "Signing out..." : "Sign Out"}
               </button>

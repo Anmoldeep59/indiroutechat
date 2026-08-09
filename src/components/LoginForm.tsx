@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { getFirebaseAuthErrorMessage } from "@/lib/auth-errors";
 import { auth, googleProvider } from "@/lib/firebase";
+import { syncProfileWithServer } from "@/lib/sync-profile";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -61,7 +62,8 @@ export function LoginForm() {
     setIsSubmitting(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      await syncProfileWithServer(credential.user);
       router.push("/dashboard");
     } catch (error) {
       setFormError(getFirebaseAuthErrorMessage(error, "login"));
@@ -77,7 +79,8 @@ export function LoginForm() {
     setIsGoogleLoading(true);
 
     try {
-      await signInWithPopup(auth, googleProvider);
+      const credential = await signInWithPopup(auth, googleProvider);
+      await syncProfileWithServer(credential.user);
       router.push("/dashboard");
     } catch (error) {
       setFormError(getFirebaseAuthErrorMessage(error, "login"));
@@ -208,12 +211,12 @@ export function LoginForm() {
           <span>Remember me</span>
         </label>
 
-        <a
-          href="#forgot-password"
+        <Link
+          href="/forgot-password"
           className="text-sm font-semibold text-accent transition-colors hover:text-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           Forgot Password?
-        </a>
+        </Link>
       </div>
 
       <button

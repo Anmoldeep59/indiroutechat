@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { createUserWithEmailAndPassword, signInWithPopup, updateProfile } from "firebase/auth";
 import { getFirebaseAuthErrorMessage } from "@/lib/auth-errors";
 import { auth, googleProvider } from "@/lib/firebase";
+import { syncProfileWithServer } from "@/lib/sync-profile";
 
 const countries = [
   "Australia",
@@ -178,6 +179,13 @@ export function SignupForm() {
         displayName: `${firstName} ${lastName}`.trim(),
       });
 
+      await syncProfileWithServer(credential.user, {
+        firstName,
+        lastName,
+        phone,
+        country,
+      });
+
       setSuccessMessage(
         "Account created successfully. Redirecting to your dashboard...",
       );
@@ -197,7 +205,8 @@ export function SignupForm() {
     setIsGoogleLoading(true);
 
     try {
-      await signInWithPopup(auth, googleProvider);
+      const credential = await signInWithPopup(auth, googleProvider);
+      await syncProfileWithServer(credential.user);
       setSuccessMessage(
         "Signed in with Google. Redirecting to your dashboard...",
       );

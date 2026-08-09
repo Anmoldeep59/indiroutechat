@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# IndiRoute
 
-## Getting Started
+IndiRoute is a global parcel-forwarding and assisted-purchase platform.
 
-First, run the development server:
+Customers receive an Indian warehouse/locker address, shop from Indian stores, consolidate parcels, and ship worldwide.
+
+## Stack
+
+- Next.js App Router + TypeScript + Tailwind CSS
+- Firebase Authentication (email/password + Google)
+- Supabase PostgreSQL (application data)
+- Resend (transactional email — configured, not fully wired yet)
+- Stripe (payments — configured, not fully wired yet)
+
+## Getting started
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy environment variables:
+
+```bash
+cp .env.example .env.local
+```
+
+3. Fill in Firebase and Supabase values in `.env.local`.
+
+4. In Supabase SQL Editor, run migrations in order:
+
+- `supabase/migrations/001_create_profiles.sql`
+- `supabase/migrations/002_create_core_schema.sql`
+- `supabase/migrations/003_rls_shipping_rates_and_profiles.sql`
+
+5. Start the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Important routes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `/` — public marketing homepage
+- `/signup` — create account
+- `/login` — sign in
+- `/forgot-password` — password reset
+- `/dashboard` — customer dashboard (auth required)
+- `/admin` — admin panel (auth + `profiles.role = admin`)
 
-## Learn More
+## Making an admin user
 
-To learn more about Next.js, take a look at the following resources:
+1. Sign up normally.
+2. In Supabase Table Editor → `profiles`, set that user’s `role` to `admin`.
+3. Optionally insert a matching row in `admin_users`.
+4. Visit `/admin`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Profile sync
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Signup/login call `/api/profiles/sync`, which:
 
-## Deploy on Vercel
+1. Verifies the Firebase ID token with Firebase Admin
+2. Upserts a `profiles` row in Supabase using the service role key
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Required server env vars:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `FIREBASE_ADMIN_CLIENT_EMAIL`
+- `FIREBASE_ADMIN_PRIVATE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+## Logo
+
+Place a transparent PNG/SVG at `public/logo.svg` (or `logo.png`) and set `USE_IMAGE_LOGO = true` in `src/components/Logo.tsx`.
+
+## Scripts
+
+```bash
+npm run lint
+npm run build
+npm run dev
+```
+
+## What is intentionally not finished yet
+
+- Live locker assignment / parcel ingestion
+- Stripe Checkout + webhook fulfillment
+- Resend email templates/sending flows
+- Full admin CRUD for every entity
+- Server middleware hardening beyond current gates

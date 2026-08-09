@@ -1,11 +1,10 @@
-import type { User } from "firebase/auth";
+"use client";
 
-type DashboardOverviewProps = {
-  user: User;
-};
+import { useAuthState } from "@/hooks/useAuthState";
 
-export function DashboardOverview({ user }: DashboardOverviewProps) {
-  const displayName = user.displayName?.trim() || "there";
+export function DashboardOverview() {
+  const { user } = useAuthState();
+  const displayName = user?.displayName?.trim() || "there";
 
   return (
     <div className="space-y-6">
@@ -29,10 +28,11 @@ export function DashboardOverview({ user }: DashboardOverviewProps) {
             My India Address
           </h3>
           <p className="mt-3 text-sm leading-relaxed text-brand-muted">
-            Your personal IndiRoute warehouse address will appear here.
+            Your personal IndiRoute warehouse address will appear here after
+            locker assignment.
           </p>
           <p className="mt-4 font-display text-xs font-semibold uppercase tracking-wide text-accent">
-            Coming soon
+            Pending assignment
           </p>
         </article>
 
@@ -94,19 +94,28 @@ export function DashboardOverview({ user }: DashboardOverviewProps) {
             Quick Actions
           </h3>
           <p className="mt-3 text-sm leading-relaxed text-brand-muted">
-            Shortcuts will help you ship, consolidate, or request pickup once
-            those tools are live.
+            Shortcuts for shipping, consolidation, and pickup will become active
+            as those tools go live.
           </p>
           <div className="mt-5 flex flex-col gap-2.5">
-            <span className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-brand-muted">
+            <a
+              href="/dashboard/shipping-calculator"
+              className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-brand transition-colors hover:border-brand/30"
+            >
               Calculate Shipping
-            </span>
-            <span className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-brand-muted">
+            </a>
+            <a
+              href="/dashboard/consolidation"
+              className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-brand transition-colors hover:border-brand/30"
+            >
               Request Consolidation
-            </span>
-            <span className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent/10 px-4 text-sm font-semibold text-accent">
-              Copy India Address
-            </span>
+            </a>
+            <a
+              href="/dashboard/locker"
+              className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent/10 px-4 text-sm font-semibold text-accent transition-colors hover:bg-accent/15"
+            >
+              View India Address
+            </a>
           </div>
         </article>
       </section>

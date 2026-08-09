@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { useAuthState } from "@/hooks/useAuthState";
 
-export function DashboardApp() {
+export function DashboardGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { user, loading } = useAuthState();
 
@@ -43,9 +42,5 @@ export function DashboardApp() {
     );
   }
 
-  return (
-    <DashboardShell user={user}>
-      <DashboardOverview user={user} />
-    </DashboardShell>
-  );
+  return <DashboardShell user={user}>{children}</DashboardShell>;
 }
