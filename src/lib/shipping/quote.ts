@@ -1,10 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { SHIPPING_COUNTRIES } from "./countries";
+import { DEFAULT_PACKING_FEE_SLABS, DEFAULT_SHIPPING_SETTINGS } from "./defaults";
 import {
   buildQuote,
   QuoteBuildError,
   toPublicQuote,
   type QuoteBuildContext,
 } from "./quote-builder";
+import { generateSeedRates } from "./seed-rates";
+import { getDefaultServiceMap } from "./service-map";
 import {
   loadActiveRatesForCountry,
   loadEnabledCountryCodes,
@@ -16,31 +20,71 @@ import type { QuoteRequestInput, QuoteResult } from "./types";
 
 export { QuoteBuildError, toPublicQuote };
 
+function buildOfflineQuoteContext(countryCode: string): QuoteBuildContext {
+  const code = countryCode.trim().toUpperCase();
+  return {
+    rates: generateSeedRates().filter(
+      (row) => row.country_code.toUpperCase() === code,
+    ),
+    settings: { ...DEFAULT_SHIPPING_SETTINGS },
+    packingSlabs: DEFAULT_PACKING_FEE_SLABS.map((slab) => ({ ...slab })),
+    serviceMap: getDefaultServiceMap(code),
+    enabledCountryCodes: new Set(SHIPPING_COUNTRIES.map((c) => c.code)),
+  };
+}
+
+/**
+ * Authoritative quote. Uses Supabase when configured; otherwise falls back to
+ * in-memory seed rates so the public calculator still works during setup.
+ */
 export async function createShippingQuote(
-  db: SupabaseClient,
+  db: SupabaseClient | null,
   input: QuoteRequestInput,
   options?: { includeAdminDetails?: boolean },
 ): Promise<QuoteResult & { adminOptions?: QuoteResult["options"] }> {
   const countryCode = input.countryCode.trim().toUpperCase();
 
-  const [settings, packingSlabs, enabledCountries, serviceMap, rates] =
-    await Promise.all([
-      loadShippingSettings(db),
-      loadPackingFeeSlabs(db),
-      loadEnabledCountryCodes(db),
-      loadServiceMap(db, countryCode),
-      loadActiveRatesForCountry(db, countryCode),
-    ]);
+  if (!db) {
+    console.warn(
+      "[shipping/quote] Supabase admin unavailable — using in-memory seed rates.",
+    );
+    return buildQuote(input, buildOfflineQuoteContext(countryCode), options);
+  }
 
-  const context: QuoteBuildContext = {
-    rates,
-    settings,
-    packingSlabs,
-    serviceMap,
-    enabledCountryCodes: enabledCountries,
-  };
+  try {
+    const [settings, packingSlabs, enabledCountries, serviceMap, rates] =
+      await Promise.all([
+        loadShippingSettings(db),
+        loadPackingFeeSlabs(db),
+        loadEnabledCountryCodes(db),
+        loadServiceMap(db, countryCode),
+        loadActiveRatesForCountry(db, countryCode),
+      ]);
 
-  return buildQuote(input, context, options);
+    // If migration/rates are not loaded yet, fall back to seed data.
+    if (rates.length === 0) {
+      console.warn(
+        `[shipping/quote] No DB rates for ${countryCode} — using in-memory seed rates.`,
+      );
+      return buildQuote(input, buildOfflineQuoteContext(countryCode), options);
+    }
+
+    const context: QuoteBuildContext = {
+      rates,
+      settings,
+      packingSlabs,
+      serviceMap,
+      enabledCountryCodes: enabledCountries,
+    };
+
+    return buildQuote(input, context, options);
+  } catch (error) {
+    console.error(
+      "[shipping/quote] DB quote failed — falling back to seed rates.",
+      error,
+    );
+    return buildQuote(input, buildOfflineQuoteContext(countryCode), options);
+  }
 }
 
 export function parseQuoteRequestBody(body: unknown): QuoteRequestInput {

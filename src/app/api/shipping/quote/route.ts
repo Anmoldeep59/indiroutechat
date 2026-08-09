@@ -8,14 +8,6 @@ import {
 } from "@/lib/shipping/quote";
 
 export async function POST(request: Request) {
-  const db = getSupabaseAdmin();
-  if (!db) {
-    return NextResponse.json(
-      { error: "Shipping service is temporarily unavailable." },
-      { status: 503 },
-    );
-  }
-
   let body: unknown;
   try {
     body = await request.json();
@@ -25,7 +17,7 @@ export async function POST(request: Request) {
 
   try {
     const input = parseQuoteRequestBody(body);
-    const quote = await createShippingQuote(db, input);
+    const quote = await createShippingQuote(getSupabaseAdmin(), input);
     return NextResponse.json({ quote: toPublicQuote(quote) });
   } catch (error) {
     if (error instanceof QuoteBuildError) {
