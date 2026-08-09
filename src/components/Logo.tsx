@@ -10,11 +10,25 @@ import Link from "next/link";
 const USE_IMAGE_LOGO = false;
 const LOGO_SRC = "/logo.svg";
 
-export function Logo() {
+type LogoProps = {
+  tone?: "default" | "on-dark";
+};
+
+export function Logo({ tone = "default" }: LogoProps) {
+  const textClass =
+    tone === "on-dark"
+      ? "font-display text-xl font-bold tracking-tight text-white sm:text-[1.625rem]"
+      : "font-display text-xl font-bold tracking-tight text-brand sm:text-[1.625rem]";
+
+  const focusClass =
+    tone === "on-dark"
+      ? "focus-visible:outline-accent"
+      : "focus-visible:outline-brand";
+
   return (
     <Link
       href="/"
-      className="inline-flex shrink-0 items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+      className={`inline-flex shrink-0 items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${focusClass}`}
       aria-label="IndiRoute home"
     >
       {USE_IMAGE_LOGO ? (
@@ -27,9 +41,7 @@ export function Logo() {
           priority
         />
       ) : (
-        <span className="font-display text-xl font-bold tracking-tight text-brand sm:text-[1.625rem]">
-          IndiRoute
-        </span>
+        <span className={textClass}>IndiRoute</span>
       )}
     </Link>
   );
