@@ -75,6 +75,8 @@ export function useMyLocker(): UseMyLockerResult {
           setError(
             "Your locker has not been assigned yet. Please refresh or sign in again.",
           );
+        } else {
+          setError(null);
         }
       } catch {
         if (!cancelled) {
