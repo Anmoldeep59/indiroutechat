@@ -32,12 +32,12 @@ export function CallToAction() {
           </p>
 
           <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:mt-10 sm:flex-row sm:items-center">
-            <button
-              type="button"
+            <a
+              href="/signup"
               className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               Create Free Account
-            </button>
+            </a>
             <a
               href="#how-it-works"
               className="inline-flex min-h-11 items-center justify-center rounded-md border border-white/30 bg-transparent px-6 text-sm font-semibold text-white transition-colors hover:border-white/50 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"

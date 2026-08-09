@@ -1,10 +1,12 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import Link from "next/link";
+import type { ButtonHTMLAttributes, MouseEventHandler, ReactNode } from "react";
 
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   children: ReactNode;
+  href?: string;
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -18,19 +20,34 @@ const variantClasses: Record<ButtonVariant, string> = {
     "text-brand hover:bg-brand/[0.06] focus-visible:outline-brand",
 };
 
+const baseClassName =
+  "inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-semibold tracking-tight transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50";
+
 export function Button({
   variant = "primary",
   className = "",
   children,
   type = "button",
+  href,
+  onClick,
   ...props
 }: ButtonProps) {
+  const classes = `${baseClassName} ${variantClasses[variant]} ${className}`;
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={classes}
+        onClick={onClick as MouseEventHandler<HTMLAnchorElement> | undefined}
+      >
+        {children}
+      </Link>
+    );
+  }
+
   return (
-    <button
-      type={type}
-      className={`inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-semibold tracking-tight transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50 ${variantClasses[variant]} ${className}`}
-      {...props}
-    >
+    <button type={type} className={classes} onClick={onClick} {...props}>
       {children}
     </button>
   );

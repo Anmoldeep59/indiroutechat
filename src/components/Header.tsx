@@ -61,12 +61,14 @@ export function Header() {
 
         <div className="hidden items-center justify-self-end gap-2.5 md:flex">
           <Button
+            href="/login"
             variant="ghost"
             className="px-4 py-2 text-brand hover:bg-brand/[0.05]"
           >
             Login
           </Button>
           <Button
+            href="/signup"
             variant="secondary"
             className="px-5 py-2 shadow-none"
           >
@@ -137,12 +139,19 @@ export function Header() {
 
             <div className="mt-3 flex flex-col gap-2.5 border-t border-border/70 pt-4">
               <Button
+                href="/login"
                 variant="outline"
                 className="w-full border-brand/20 text-brand"
+                onClick={() => setMenuOpen(false)}
               >
                 Login
               </Button>
-              <Button variant="secondary" className="w-full">
+              <Button
+                href="/signup"
+                variant="secondary"
+                className="w-full"
+                onClick={() => setMenuOpen(false)}
+              >
                 Sign Up
               </Button>
             </div>

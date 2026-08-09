@@ -32,12 +32,14 @@ export function Hero() {
 
         <div className="animate-fade-up animation-delay-300 mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Button
+            href="/signup"
             variant="primary"
             className="w-full px-6 py-3 text-base sm:w-auto"
           >
             Get Your India Address
           </Button>
           <Button
+            href="#shipping-calculator"
             variant="outline"
             className="w-full px-6 py-3 text-base sm:w-auto"
           >
