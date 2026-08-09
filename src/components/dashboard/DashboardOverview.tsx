@@ -1,14 +1,60 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LockerAddressCard } from "@/components/dashboard/LockerAddressCard";
 import { useAuthState } from "@/hooks/useAuthState";
 import { useMyLocker } from "@/hooks/useMyLocker";
 
 export function DashboardOverview() {
-  const { user } = useAuthState();
+  const { user, loading: authLoading } = useAuthState();
   const { locker, loading: lockerLoading, error: lockerError } = useMyLocker();
+  const [incomingCount, setIncomingCount] = useState<number | null>(null);
+  const [countLoading, setCountLoading] = useState(true);
   const displayName = user?.displayName?.trim() || "there";
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      queueMicrotask(() => {
+        setIncomingCount(null);
+        setCountLoading(false);
+      });
+      return;
+    }
+
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) setCountLoading(true);
+    });
+
+    async function loadCount() {
+      try {
+        const idToken = await user!.getIdToken();
+        const response = await fetch("/api/parcels/me?count=incoming", {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          count?: number;
+        } | null;
+
+        if (!cancelled) {
+          setIncomingCount(response.ok ? (payload?.count ?? 0) : null);
+        }
+      } catch {
+        if (!cancelled) setIncomingCount(null);
+      } finally {
+        if (!cancelled) setCountLoading(false);
+      }
+    }
+
+    void loadCount();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user]);
 
   return (
     <div className="space-y-6">
@@ -64,11 +110,17 @@ export function DashboardOverview() {
               Incoming Parcels
             </h3>
             <p className="mt-3 font-display text-3xl font-bold tracking-tight text-brand">
-              —
+              {countLoading ? "…" : incomingCount == null ? "—" : incomingCount}
             </p>
             <p className="mt-2 text-sm text-brand-muted">
-              Parcels heading to your locker.
+              Parcels currently at the warehouse.
             </p>
+            <Link
+              href="/dashboard/parcels"
+              className="mt-3 inline-flex text-sm font-semibold text-accent hover:text-accent-hover"
+            >
+              View parcels
+            </Link>
           </article>
           <article className="rounded-xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(12,35,64,0.04)]">
             <h3 className="font-display text-sm font-semibold text-brand">
