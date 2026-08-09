@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { createUserWithEmailAndPassword, signInWithPopup, updateProfile } from "firebase/auth";
+import { getFirebaseAuthErrorMessage } from "@/lib/auth-errors";
+import { auth, googleProvider } from "@/lib/firebase";
 
 const countries = [
   "Australia",
@@ -11,11 +15,15 @@ const countries = [
   "New Zealand",
 ] as const;
 
+const MIN_PASSWORD_LENGTH = 8;
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const fieldClassName =
-  "mt-1.5 min-h-11 w-full rounded-md border border-border bg-background px-3.5 text-sm text-brand outline-none transition-colors placeholder:text-brand-muted/60 focus:border-accent focus:ring-2 focus:ring-accent/25";
+  "mt-1.5 min-h-11 w-full rounded-md border border-border bg-background px-3.5 text-sm text-brand outline-none transition-colors placeholder:text-brand-muted/60 focus:border-accent focus:ring-2 focus:ring-accent/25 disabled:cursor-not-allowed disabled:opacity-60";
 
 const fieldErrorClassName =
-  "mt-1.5 min-h-11 w-full rounded-md border border-red-500 bg-background px-3.5 text-sm text-brand outline-none transition-colors placeholder:text-brand-muted/60 focus:border-red-500 focus:ring-2 focus:ring-red-500/20";
+  "mt-1.5 min-h-11 w-full rounded-md border border-red-500 bg-background px-3.5 text-sm text-brand outline-none transition-colors placeholder:text-brand-muted/60 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:opacity-60";
 
 const labelClassName = "block text-sm font-semibold tracking-tight text-brand";
 
@@ -35,17 +43,20 @@ function PasswordToggle({
   onToggle,
   labelShow,
   labelHide,
+  disabled,
 }: {
   show: boolean;
   onToggle: () => void;
   labelShow: string;
   labelHide: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onToggle}
-      className="absolute inset-y-0 right-0 flex items-center px-3.5 text-sm font-medium text-brand-muted transition-colors hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
+      disabled={disabled}
+      className="absolute inset-y-0 right-0 flex items-center px-3.5 text-sm font-medium text-brand-muted transition-colors hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
       aria-label={show ? labelHide : labelShow}
       aria-pressed={show}
     >
@@ -90,14 +101,24 @@ function PasswordToggle({
 }
 
 export function SignupForm() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const isBusy = isSubmitting || isGoogleLoading;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const formData = new FormData(event.currentTarget);
+    if (isBusy) return;
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const firstName = String(formData.get("firstName") ?? "").trim();
     const lastName = String(formData.get("lastName") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim();
@@ -111,20 +132,80 @@ export function SignupForm() {
 
     if (!firstName) nextErrors.firstName = "First name is required.";
     if (!lastName) nextErrors.lastName = "Last name is required.";
-    if (!email) nextErrors.email = "Email address is required.";
+
+    if (!email) {
+      nextErrors.email = "Email address is required.";
+    } else if (!EMAIL_PATTERN.test(email)) {
+      nextErrors.email = "Please enter a valid email address.";
+    }
+
     if (!phone) nextErrors.phone = "Phone number is required.";
     if (!country) nextErrors.country = "Please select a country.";
-    if (!password) nextErrors.password = "Password is required.";
+
+    if (!password) {
+      nextErrors.password = "Password is required.";
+    } else if (password.length < MIN_PASSWORD_LENGTH) {
+      nextErrors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+    }
+
     if (!confirmPassword) {
       nextErrors.confirmPassword = "Please confirm your password.";
-    } else if (password && password !== confirmPassword) {
+    } else if (password !== confirmPassword) {
       nextErrors.confirmPassword = "Passwords do not match.";
     }
+
     if (!termsAccepted) {
-      nextErrors.terms = "Please agree to the Terms & Conditions and Privacy Policy.";
+      nextErrors.terms =
+        "Please agree to the Terms & Conditions and Privacy Policy.";
     }
 
     setErrors(nextErrors);
+    setFormError(null);
+    setSuccessMessage(null);
+
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setIsSubmitting(true);
+
+    try {
+      const credential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
+
+      await updateProfile(credential.user, {
+        displayName: `${firstName} ${lastName}`.trim(),
+      });
+
+      setSuccessMessage(
+        "Account created successfully. Redirecting to your dashboard...",
+      );
+      router.push("/dashboard");
+    } catch (error) {
+      setFormError(getFirebaseAuthErrorMessage(error));
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    if (isBusy) return;
+
+    setErrors({});
+    setFormError(null);
+    setSuccessMessage(null);
+    setIsGoogleLoading(true);
+
+    try {
+      await signInWithPopup(auth, googleProvider);
+      setSuccessMessage(
+        "Signed in with Google. Redirecting to your dashboard...",
+      );
+      router.push("/dashboard");
+    } catch (error) {
+      setFormError(getFirebaseAuthErrorMessage(error, "signup"));
+      setIsGoogleLoading(false);
+    }
   }
 
   function fieldClass(hasError?: string) {
@@ -133,6 +214,24 @@ export function SignupForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-5">
+      {formError ? (
+        <p
+          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          role="alert"
+        >
+          {formError}
+        </p>
+      ) : null}
+
+      {successMessage ? (
+        <p
+          className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+          role="status"
+        >
+          {successMessage}
+        </p>
+      ) : null}
+
       <div className="grid gap-5 sm:grid-cols-2">
         <div>
           <label htmlFor="first-name" className={labelClassName}>
@@ -144,12 +243,17 @@ export function SignupForm() {
             type="text"
             autoComplete="given-name"
             placeholder="First name"
+            disabled={isBusy}
             aria-invalid={Boolean(errors.firstName)}
             aria-describedby={errors.firstName ? "first-name-error" : undefined}
             className={fieldClass(errors.firstName)}
           />
           {errors.firstName ? (
-            <p id="first-name-error" className="mt-1.5 text-sm text-red-600" role="alert">
+            <p
+              id="first-name-error"
+              className="mt-1.5 text-sm text-red-600"
+              role="alert"
+            >
               {errors.firstName}
             </p>
           ) : null}
@@ -165,12 +269,17 @@ export function SignupForm() {
             type="text"
             autoComplete="family-name"
             placeholder="Last name"
+            disabled={isBusy}
             aria-invalid={Boolean(errors.lastName)}
             aria-describedby={errors.lastName ? "last-name-error" : undefined}
             className={fieldClass(errors.lastName)}
           />
           {errors.lastName ? (
-            <p id="last-name-error" className="mt-1.5 text-sm text-red-600" role="alert">
+            <p
+              id="last-name-error"
+              className="mt-1.5 text-sm text-red-600"
+              role="alert"
+            >
               {errors.lastName}
             </p>
           ) : null}
@@ -188,12 +297,17 @@ export function SignupForm() {
           autoComplete="email"
           inputMode="email"
           placeholder="you@example.com"
+          disabled={isBusy}
           aria-invalid={Boolean(errors.email)}
           aria-describedby={errors.email ? "signup-email-error" : undefined}
           className={fieldClass(errors.email)}
         />
         {errors.email ? (
-          <p id="signup-email-error" className="mt-1.5 text-sm text-red-600" role="alert">
+          <p
+            id="signup-email-error"
+            className="mt-1.5 text-sm text-red-600"
+            role="alert"
+          >
             {errors.email}
           </p>
         ) : null}
@@ -210,6 +324,7 @@ export function SignupForm() {
           autoComplete="tel"
           inputMode="tel"
           placeholder="+61 400 000 000"
+          disabled={isBusy}
           aria-invalid={Boolean(errors.phone)}
           aria-describedby={errors.phone ? "phone-error" : undefined}
           className={fieldClass(errors.phone)}
@@ -230,6 +345,7 @@ export function SignupForm() {
           name="country"
           defaultValue=""
           autoComplete="country-name"
+          disabled={isBusy}
           aria-invalid={Boolean(errors.country)}
           aria-describedby={errors.country ? "country-error" : undefined}
           className={fieldClass(errors.country)}
@@ -237,14 +353,18 @@ export function SignupForm() {
           <option value="" disabled>
             Select a country
           </option>
-          {countries.map((country) => (
-            <option key={country} value={country}>
-              {country}
+          {countries.map((countryOption) => (
+            <option key={countryOption} value={countryOption}>
+              {countryOption}
             </option>
           ))}
         </select>
         {errors.country ? (
-          <p id="country-error" className="mt-1.5 text-sm text-red-600" role="alert">
+          <p
+            id="country-error"
+            className="mt-1.5 text-sm text-red-600"
+            role="alert"
+          >
             {errors.country}
           </p>
         ) : null}
@@ -261,8 +381,11 @@ export function SignupForm() {
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             placeholder="Create a password"
+            disabled={isBusy}
             aria-invalid={Boolean(errors.password)}
-            aria-describedby={errors.password ? "signup-password-error" : undefined}
+            aria-describedby={
+              errors.password ? "signup-password-error" : undefined
+            }
             className={`${fieldClass(errors.password)} mt-0 pr-12`}
           />
           <PasswordToggle
@@ -270,10 +393,15 @@ export function SignupForm() {
             onToggle={() => setShowPassword((value) => !value)}
             labelShow="Show password"
             labelHide="Hide password"
+            disabled={isBusy}
           />
         </div>
         {errors.password ? (
-          <p id="signup-password-error" className="mt-1.5 text-sm text-red-600" role="alert">
+          <p
+            id="signup-password-error"
+            className="mt-1.5 text-sm text-red-600"
+            role="alert"
+          >
             {errors.password}
           </p>
         ) : null}
@@ -290,6 +418,7 @@ export function SignupForm() {
             type={showConfirmPassword ? "text" : "password"}
             autoComplete="new-password"
             placeholder="Confirm your password"
+            disabled={isBusy}
             aria-invalid={Boolean(errors.confirmPassword)}
             aria-describedby={
               errors.confirmPassword ? "confirm-password-error" : undefined
@@ -301,6 +430,7 @@ export function SignupForm() {
             onToggle={() => setShowConfirmPassword((value) => !value)}
             labelShow="Show confirm password"
             labelHide="Hide confirm password"
+            disabled={isBusy}
           />
         </div>
         {errors.confirmPassword ? (
@@ -320,9 +450,10 @@ export function SignupForm() {
             id="terms"
             name="terms"
             type="checkbox"
+            disabled={isBusy}
             aria-invalid={Boolean(errors.terms)}
             aria-describedby={errors.terms ? "terms-error" : undefined}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-border text-accent accent-[var(--accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-border text-accent accent-[var(--accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
           />
           <span>
             I agree to the{" "}
@@ -350,9 +481,10 @@ export function SignupForm() {
 
       <button
         type="submit"
-        className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        disabled={isBusy}
+        className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-70"
       >
-        Create Account
+        {isSubmitting ? "Creating account..." : "Create Account"}
       </button>
 
       <div className="relative py-1">
@@ -368,7 +500,9 @@ export function SignupForm() {
 
       <button
         type="button"
-        className="inline-flex min-h-11 w-full items-center justify-center gap-2.5 rounded-md border border-border bg-background px-5 text-sm font-semibold text-brand transition-colors hover:border-brand/30 hover:bg-brand/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        onClick={handleGoogleSignIn}
+        disabled={isBusy}
+        className="inline-flex min-h-11 w-full items-center justify-center gap-2.5 rounded-md border border-border bg-background px-5 text-sm font-semibold text-brand transition-colors hover:border-brand/30 hover:bg-brand/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
           <path
@@ -388,7 +522,7 @@ export function SignupForm() {
             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
           />
         </svg>
-        Continue with Google
+        {isGoogleLoading ? "Connecting to Google..." : "Continue with Google"}
       </button>
 
       <p className="pt-1 text-center text-sm text-brand-muted">

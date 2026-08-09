@@ -1,22 +1,105 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import { getFirebaseAuthErrorMessage } from "@/lib/auth-errors";
+import { auth, googleProvider } from "@/lib/firebase";
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const fieldClassName =
-  "mt-1.5 min-h-11 w-full rounded-md border border-border bg-background px-3.5 text-sm text-brand outline-none transition-colors placeholder:text-brand-muted/60 focus:border-accent focus:ring-2 focus:ring-accent/25";
+  "mt-1.5 min-h-11 w-full rounded-md border border-border bg-background px-3.5 text-sm text-brand outline-none transition-colors placeholder:text-brand-muted/60 focus:border-accent focus:ring-2 focus:ring-accent/25 disabled:cursor-not-allowed disabled:opacity-60";
+
+const fieldErrorClassName =
+  "mt-1.5 min-h-11 w-full rounded-md border border-red-500 bg-background px-3.5 text-sm text-brand outline-none transition-colors placeholder:text-brand-muted/60 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:opacity-60";
 
 const labelClassName = "block text-sm font-semibold tracking-tight text-brand";
 
-export function LoginForm() {
-  const [showPassword, setShowPassword] = useState(false);
+type FormErrors = {
+  email?: string;
+  password?: string;
+};
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+export function LoginForm() {
+  const router = useRouter();
+  const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  const isBusy = isSubmitting || isGoogleLoading;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (isBusy) return;
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
+
+    const nextErrors: FormErrors = {};
+
+    if (!email) {
+      nextErrors.email = "Email address is required.";
+    } else if (!EMAIL_PATTERN.test(email)) {
+      nextErrors.email = "Please enter a valid email address.";
+    }
+
+    if (!password) {
+      nextErrors.password = "Password is required.";
+    }
+
+    setErrors(nextErrors);
+    setFormError(null);
+
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setIsSubmitting(true);
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      router.push("/dashboard");
+    } catch (error) {
+      setFormError(getFirebaseAuthErrorMessage(error, "login"));
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    if (isBusy) return;
+
+    setFormError(null);
+    setErrors({});
+    setIsGoogleLoading(true);
+
+    try {
+      await signInWithPopup(auth, googleProvider);
+      router.push("/dashboard");
+    } catch (error) {
+      setFormError(getFirebaseAuthErrorMessage(error, "login"));
+      setIsGoogleLoading(false);
+    }
+  }
+
+  function fieldClass(hasError?: string) {
+    return hasError ? fieldErrorClassName : fieldClassName;
   }
 
   return (
     <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-5">
+      {formError ? (
+        <p
+          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          role="alert"
+        >
+          {formError}
+        </p>
+      ) : null}
+
       <div>
         <label htmlFor="email" className={labelClassName}>
           Email Address
@@ -28,8 +111,16 @@ export function LoginForm() {
           autoComplete="email"
           inputMode="email"
           placeholder="you@example.com"
-          className={fieldClassName}
+          disabled={isBusy}
+          aria-invalid={Boolean(errors.email)}
+          aria-describedby={errors.email ? "email-error" : undefined}
+          className={fieldClass(errors.email)}
         />
+        {errors.email ? (
+          <p id="email-error" className="mt-1.5 text-sm text-red-600" role="alert">
+            {errors.email}
+          </p>
+        ) : null}
       </div>
 
       <div>
@@ -43,12 +134,16 @@ export function LoginForm() {
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
             placeholder="Enter your password"
-            className={`${fieldClassName} mt-0 pr-12`}
+            disabled={isBusy}
+            aria-invalid={Boolean(errors.password)}
+            aria-describedby={errors.password ? "password-error" : undefined}
+            className={`${fieldClass(errors.password)} mt-0 pr-12`}
           />
           <button
             type="button"
             onClick={() => setShowPassword((value) => !value)}
-            className="absolute inset-y-0 right-0 flex items-center px-3.5 text-sm font-medium text-brand-muted transition-colors hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
+            disabled={isBusy}
+            className="absolute inset-y-0 right-0 flex items-center px-3.5 text-sm font-medium text-brand-muted transition-colors hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
             aria-label={showPassword ? "Hide password" : "Show password"}
             aria-pressed={showPassword}
           >
@@ -90,6 +185,15 @@ export function LoginForm() {
             )}
           </button>
         </div>
+        {errors.password ? (
+          <p
+            id="password-error"
+            className="mt-1.5 text-sm text-red-600"
+            role="alert"
+          >
+            {errors.password}
+          </p>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -98,7 +202,8 @@ export function LoginForm() {
             id="remember-me"
             name="rememberMe"
             type="checkbox"
-            className="h-4 w-4 rounded border-border text-accent accent-[var(--accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            disabled={isBusy}
+            className="h-4 w-4 rounded border-border text-accent accent-[var(--accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
           />
           <span>Remember me</span>
         </label>
@@ -113,9 +218,10 @@ export function LoginForm() {
 
       <button
         type="submit"
-        className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        disabled={isBusy}
+        className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-70"
       >
-        Sign In
+        {isSubmitting ? "Signing in..." : "Sign In"}
       </button>
 
       <div className="relative py-1">
@@ -131,7 +237,9 @@ export function LoginForm() {
 
       <button
         type="button"
-        className="inline-flex min-h-11 w-full items-center justify-center gap-2.5 rounded-md border border-border bg-background px-5 text-sm font-semibold text-brand transition-colors hover:border-brand/30 hover:bg-brand/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        onClick={handleGoogleSignIn}
+        disabled={isBusy}
+        className="inline-flex min-h-11 w-full items-center justify-center gap-2.5 rounded-md border border-border bg-background px-5 text-sm font-semibold text-brand transition-colors hover:border-brand/30 hover:bg-brand/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
           <path
@@ -151,7 +259,7 @@ export function LoginForm() {
             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
           />
         </svg>
-        Continue with Google
+        {isGoogleLoading ? "Connecting to Google..." : "Continue with Google"}
       </button>
 
       <p className="pt-1 text-center text-sm text-brand-muted">
