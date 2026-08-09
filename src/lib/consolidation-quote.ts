@@ -30,7 +30,10 @@ export async function generateQuoteForRequest(
       heightCm: input.finalHeightCm,
       pieces: input.finalPieces,
     },
-    { includeAdminDetails: true },
+    {
+      includeAdminDetails: true,
+      indiRouteFeeOverride: input.packingFeeOverride,
+    },
   );
 
   const adminOptions = (quoteResult.adminOptions ?? []) as AdminTierQuote[];
@@ -67,8 +70,8 @@ export async function generateQuoteForRequest(
     standard_source_rate: standard?.source?.safeSourceRate ?? null,
     packing_fee_inr:
       input.packingFeeOverride ??
-      economy?.breakdown?.packingFee ??
-      standard?.breakdown?.packingFee ??
+      economy?.breakdown?.indiRouteFee ??
+      standard?.breakdown?.indiRouteFee ??
       null,
     quote_payload: {
       public: {

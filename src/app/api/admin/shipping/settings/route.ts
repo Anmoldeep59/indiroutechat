@@ -1,20 +1,29 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth-server";
-import { DEFAULT_PACKING_FEE_SLABS } from "@/lib/shipping/defaults";
+import {
+  DEFAULT_INDIROUTE_FEE_SLABS,
+  DEFAULT_MARGIN_BRACKETS,
+} from "@/lib/shipping/defaults";
 import {
   loadEnabledCountryCodes,
-  loadPackingFeeSlabs,
+  loadIndiRouteFeeSlabs,
+  loadMarginBrackets,
   loadShippingSettings,
 } from "@/lib/shipping/settings";
-import type { PackingFeeSlab, ShippingSettings } from "@/lib/shipping/types";
+import type {
+  MarginBracket,
+  ShippingSettings,
+  WeightFeeSlab,
+} from "@/lib/shipping/types";
 
 export async function GET(request: Request) {
   const auth = await requireAdminUser(request);
   if (!auth.ok) return auth.response;
 
-  const [settings, packingSlabs, enabled] = await Promise.all([
+  const [settings, feeSlabs, marginBrackets, enabled] = await Promise.all([
     loadShippingSettings(auth.db),
-    loadPackingFeeSlabs(auth.db),
+    loadIndiRouteFeeSlabs(auth.db),
+    loadMarginBrackets(auth.db),
     loadEnabledCountryCodes(auth.db),
   ]);
 
@@ -34,7 +43,9 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     settings,
-    packingSlabs,
+    packingSlabs: feeSlabs,
+    feeSlabs,
+    marginBrackets,
     enabledCountryCodes: [...enabled],
     countries: countries ?? [],
     mappings: mappings ?? [],
@@ -43,7 +54,9 @@ export async function GET(request: Request) {
 
 type PatchBody = {
   settings?: Partial<ShippingSettings>;
-  packingSlabs?: PackingFeeSlab[];
+  packingSlabs?: WeightFeeSlab[];
+  feeSlabs?: WeightFeeSlab[];
+  marginBrackets?: MarginBracket[];
   countries?: Array<{ country_code: string; enabled: boolean }>;
 };
 
@@ -74,6 +87,9 @@ export async function PATCH(request: Request) {
       express_enabled: next.express_enabled,
       final_price_round_to_inr: next.final_price_round_to_inr,
       currency: next.currency,
+      quote_validity_hours: next.quote_validity_hours,
+      aramex_fuel_surcharge_percent: next.aramex_fuel_surcharge_percent,
+      base_rate_source: next.base_rate_source,
     });
     if (error) {
       return NextResponse.json(
@@ -83,18 +99,17 @@ export async function PATCH(request: Request) {
     }
   }
 
-  if (body.packingSlabs) {
+  const feeSlabs = body.feeSlabs ?? body.packingSlabs;
+  if (feeSlabs) {
     const slabs =
-      body.packingSlabs.length > 0
-        ? body.packingSlabs
-        : DEFAULT_PACKING_FEE_SLABS;
+      feeSlabs.length > 0 ? feeSlabs : DEFAULT_INDIROUTE_FEE_SLABS;
 
     await auth.db
-      .from("shipping_packing_fee_slabs")
+      .from("shipping_indiroute_fee_slabs")
       .delete()
       .gte("created_at", "1970-01-01");
 
-    const { error } = await auth.db.from("shipping_packing_fee_slabs").insert(
+    const { error } = await auth.db.from("shipping_indiroute_fee_slabs").insert(
       slabs.map((slab) => ({
         min_kg: slab.min_kg,
         max_kg: slab.max_kg,
@@ -105,7 +120,36 @@ export async function PATCH(request: Request) {
 
     if (error) {
       return NextResponse.json(
-        { error: "Unable to update packing fee slabs." },
+        { error: "Unable to update IndiRoute fee slabs." },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (body.marginBrackets) {
+    const brackets =
+      body.marginBrackets.length > 0
+        ? body.marginBrackets
+        : DEFAULT_MARGIN_BRACKETS;
+
+    await auth.db
+      .from("shipping_margin_brackets")
+      .delete()
+      .gte("created_at", "1970-01-01");
+
+    const { error } = await auth.db.from("shipping_margin_brackets").insert(
+      brackets.map((bracket, index) => ({
+        min_amount_inr: bracket.min_amount_inr,
+        max_amount_inr: bracket.max_amount_inr,
+        margin_percent: bracket.margin_percent,
+        sort_order: index + 1,
+        active: true,
+      })),
+    );
+
+    if (error) {
+      return NextResponse.json(
+        { error: "Unable to update margin brackets." },
         { status: 500 },
       );
     }
@@ -121,6 +165,13 @@ export async function PATCH(request: Request) {
   }
 
   const settings = await loadShippingSettings(auth.db);
-  const packingSlabs = await loadPackingFeeSlabs(auth.db);
-  return NextResponse.json({ settings, packingSlabs, ok: true });
+  const nextFeeSlabs = await loadIndiRouteFeeSlabs(auth.db);
+  const marginBrackets = await loadMarginBrackets(auth.db);
+  return NextResponse.json({
+    settings,
+    packingSlabs: nextFeeSlabs,
+    feeSlabs: nextFeeSlabs,
+    marginBrackets,
+    ok: true,
+  });
 }

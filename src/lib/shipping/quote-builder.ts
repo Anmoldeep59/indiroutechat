@@ -1,26 +1,32 @@
+import { resolveBaseAramexRate } from "./base-rate";
 import { resolveCountry } from "./countries";
-import { DEFAULT_PACKING_FEE_SLABS, DEFAULT_SHIPPING_SETTINGS } from "./defaults";
+import {
+  DEFAULT_INDIROUTE_FEE_SLABS,
+  DEFAULT_MARGIN_BRACKETS,
+  DEFAULT_SHIPPING_SETTINGS,
+} from "./defaults";
 import { calculateCustomerPrice, PricingSafetyError } from "./pricing";
-import { getDefaultServiceMap, type CountryServiceMap } from "./service-map";
-import { selectEconomyRate, selectStandardRate } from "./select-rate";
 import type {
   AdminTierQuote,
+  AramexBaseRateRow,
   CustomerTierQuote,
-  PackingFeeSlab,
+  MarginBracket,
   QuoteRequestInput,
   QuoteResult,
   SelectedSourceRate,
-  ShippingRateRow,
   ShippingSettings,
+  WeightFeeSlab,
 } from "./types";
 import { calculateChargeableWeightKg } from "./weight";
 
 export type QuoteBuildContext = {
-  rates: ShippingRateRow[];
+  /** Admin-entered / future-API base Aramex rates */
+  baseRates: AramexBaseRateRow[];
   settings?: ShippingSettings;
-  packingSlabs?: PackingFeeSlab[];
-  serviceMap?: CountryServiceMap | null;
+  feeSlabs?: WeightFeeSlab[];
+  marginBrackets?: MarginBracket[];
   enabledCountryCodes?: Set<string> | string[];
+  indiRouteFeeOverride?: number | null;
 };
 
 export type QuoteBuildErrorCode =
@@ -46,8 +52,10 @@ function toCustomerOption(
   chargeableWeightKg: number,
   selected: SelectedSourceRate | null,
   settings: ShippingSettings,
-  packingSlabs: PackingFeeSlab[],
+  feeSlabs: WeightFeeSlab[],
+  marginBrackets: MarginBracket[],
   includeAdmin: boolean,
+  indiRouteFeeOverride?: number | null,
 ): CustomerTierQuote | AdminTierQuote {
   if (tier === "express") {
     const express: CustomerTierQuote = {
@@ -86,10 +94,12 @@ function toCustomerOption(
 
   try {
     const breakdown = calculateCustomerPrice(
-      selected.safeSourceRate,
+      selected.baseAramexRate,
       chargeableWeightKg,
       settings,
-      packingSlabs,
+      feeSlabs,
+      marginBrackets,
+      indiRouteFeeOverride,
     );
 
     const base: CustomerTierQuote = {
@@ -113,14 +123,15 @@ function toCustomerOption(
   }
 }
 
-export function buildQuote(
+export async function buildQuote(
   input: QuoteRequestInput,
   context: QuoteBuildContext,
   options?: { includeAdminDetails?: boolean },
-): QuoteResult & { adminOptions?: AdminTierQuote[] } {
+): Promise<QuoteResult & { adminOptions?: AdminTierQuote[] }> {
   const includeAdmin = options?.includeAdminDetails === true;
   const settings = context.settings ?? DEFAULT_SHIPPING_SETTINGS;
-  const packingSlabs = context.packingSlabs ?? DEFAULT_PACKING_FEE_SLABS;
+  const feeSlabs = context.feeSlabs ?? DEFAULT_INDIROUTE_FEE_SLABS;
+  const marginBrackets = context.marginBrackets ?? DEFAULT_MARGIN_BRACKETS;
 
   const country = resolveCountry(input.countryCode);
   if (!country) {
@@ -161,71 +172,80 @@ export function buildQuote(
     throw new QuoteBuildError("invalid_dimensions", message);
   }
 
-  const serviceMap =
-    context.serviceMap ?? getDefaultServiceMap(country.code);
-
-  if (!serviceMap) {
-    throw new QuoteBuildError(
-      "unsupported_country",
-      "No service mapping exists for this country.",
-    );
-  }
-
-  const countryRates = context.rates.filter(
+  const countryRates = context.baseRates.filter(
     (row) => row.country_code.toUpperCase() === country.code && row.active,
   );
 
-  if (countryRates.length === 0) {
+  if (countryRates.length === 0 && settings.base_rate_source === "admin_table") {
     throw new QuoteBuildError(
       "missing_rates",
-      "No shipping rates are configured for this destination yet.",
+      "No Aramex base rates are configured for this destination yet.",
     );
   }
 
+  const lookupBase = {
+    countryCode: country.code,
+    countryName: country.name,
+    chargeableWeightKg: weights.chargeableWeightKg,
+  };
+
   const economySelected = settings.economy_enabled
-    ? selectEconomyRate(
-        countryRates,
-        country.code,
-        weights.chargeableWeightKg,
-        serviceMap,
+    ? await resolveBaseAramexRate(
+        { ...lookupBase, tier: "economy" },
+        {
+          source: settings.base_rate_source,
+          adminRows: countryRates,
+        },
       )
     : null;
 
   const standardSelected = settings.standard_enabled
-    ? selectStandardRate(
-        countryRates,
-        country.code,
-        weights.chargeableWeightKg,
-        serviceMap,
+    ? await resolveBaseAramexRate(
+        { ...lookupBase, tier: "standard" },
+        {
+          source: settings.base_rate_source,
+          adminRows: countryRates,
+        },
       )
     : null;
+
+  if (!economySelected && !standardSelected) {
+    throw new QuoteBuildError(
+      "missing_rates",
+      "No Aramex base rate matches this chargeable weight for Economy or Standard.",
+    );
+  }
 
   const economy = toCustomerOption(
     "economy",
     weights.chargeableWeightKg,
-    settings.economy_enabled ? economySelected : null,
+    economySelected,
     settings,
-    packingSlabs,
+    feeSlabs,
+    marginBrackets,
     includeAdmin,
+    context.indiRouteFeeOverride,
   );
   const standard = toCustomerOption(
     "standard",
     weights.chargeableWeightKg,
-    settings.standard_enabled ? standardSelected : null,
+    standardSelected,
     settings,
-    packingSlabs,
+    feeSlabs,
+    marginBrackets,
     includeAdmin,
+    context.indiRouteFeeOverride,
   );
   const express = toCustomerOption(
     "express",
     weights.chargeableWeightKg,
     null,
     settings,
-    packingSlabs,
+    feeSlabs,
+    marginBrackets,
     includeAdmin,
   );
 
-  // Express is always Coming Soon for now (no live rate).
   express.comingSoon = true;
   express.available = false;
   express.priceInr = null;
@@ -261,7 +281,6 @@ export function buildQuote(
   return result;
 }
 
-/** Strip any supplier fields before sending to browsers. */
 export function toPublicQuote(result: QuoteResult): QuoteResult {
   return {
     origin: result.origin,

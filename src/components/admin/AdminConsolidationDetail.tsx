@@ -242,7 +242,7 @@ export function AdminConsolidationDetail({ requestId }: { requestId: string }) {
             <input name="packingNotes" defaultValue={detail.packing_notes ?? ""} className={fieldClassName} />
           </div>
           <div>
-            <label className="text-sm font-semibold text-brand">Packing fee override (₹)</label>
+            <label className="text-sm font-semibold text-brand">IndiRoute fee override (₹)</label>
             <input name="packingFeeOverride" type="number" step="1" defaultValue={detail.packing_fee_override ?? ""} className={fieldClassName} />
           </div>
         </div>

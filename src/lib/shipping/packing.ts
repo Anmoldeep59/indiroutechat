@@ -1,16 +1,16 @@
-import { DEFAULT_PACKING_FEE_SLABS } from "./defaults";
-import type { PackingFeeSlab } from "./types";
+import { DEFAULT_INDIROUTE_FEE_SLABS } from "./defaults";
+import type { WeightFeeSlab } from "./types";
 
 /**
- * Packing slabs use exclusive lower bounds after the first slab:
+ * Weight slabs use exclusive lower bounds after the first slab:
  * 0–0.50, >0.50–1, >1–2, etc.
  */
-export function getPackingFee(
+export function getIndiRouteFee(
   chargeableWeightKg: number,
-  slabs: PackingFeeSlab[] = DEFAULT_PACKING_FEE_SLABS,
+  slabs: WeightFeeSlab[] = DEFAULT_INDIROUTE_FEE_SLABS,
 ): number {
   if (!Number.isFinite(chargeableWeightKg) || chargeableWeightKg < 0) {
-    throw new Error("Invalid chargeable weight for packing fee.");
+    throw new Error("Invalid chargeable weight for IndiRoute fee.");
   }
 
   const ordered = [...slabs].sort((a, b) => a.min_kg - b.min_kg);
@@ -30,4 +30,12 @@ export function getPackingFee(
   }
 
   return ordered[ordered.length - 1]?.fee_inr ?? 0;
+}
+
+/** @deprecated Use getIndiRouteFee */
+export function getPackingFee(
+  chargeableWeightKg: number,
+  slabs: WeightFeeSlab[] = DEFAULT_INDIROUTE_FEE_SLABS,
+): number {
+  return getIndiRouteFee(chargeableWeightKg, slabs);
 }

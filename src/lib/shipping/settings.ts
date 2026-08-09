@@ -1,14 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { loadAramexBaseRates } from "./base-rate";
 import { SHIPPING_COUNTRIES } from "./countries";
-import { DEFAULT_PACKING_FEE_SLABS, DEFAULT_SHIPPING_SETTINGS } from "./defaults";
+import {
+  DEFAULT_INDIROUTE_FEE_SLABS,
+  DEFAULT_MARGIN_BRACKETS,
+  DEFAULT_SHIPPING_SETTINGS,
+} from "./defaults";
 import { getDefaultServiceMap } from "./service-map";
 import type { CountryServiceMap } from "./service-map";
 import type {
-  PackingFeeSlab,
+  MarginBracket,
   ServiceCandidate,
   ShippingRateRow,
   ShippingSettings,
   SupportedCountryCode,
+  WeightFeeSlab,
 } from "./types";
 
 type SettingsRow = {
@@ -24,6 +30,8 @@ type SettingsRow = {
   final_price_round_to_inr: number;
   currency: string;
   quote_validity_hours?: number;
+  aramex_fuel_surcharge_percent?: number;
+  base_rate_source?: ShippingSettings["base_rate_source"];
 };
 
 export async function loadShippingSettings(
@@ -32,7 +40,7 @@ export async function loadShippingSettings(
   const { data, error } = await db
     .from("shipping_settings")
     .select(
-      "shipping_markup_percent, handling_fee_inr, service_fee_inr, gst_rate, volumetric_divisor, tax_mode, economy_enabled, standard_enabled, express_enabled, final_price_round_to_inr, currency, quote_validity_hours",
+      "shipping_markup_percent, handling_fee_inr, service_fee_inr, gst_rate, volumetric_divisor, tax_mode, economy_enabled, standard_enabled, express_enabled, final_price_round_to_inr, currency, quote_validity_hours, aramex_fuel_surcharge_percent, base_rate_source",
     )
     .eq("id", 1)
     .maybeSingle();
@@ -47,7 +55,9 @@ export async function loadShippingSettings(
     handling_fee_inr: Number(row.handling_fee_inr),
     service_fee_inr: Number(row.service_fee_inr),
     gst_rate: Number(row.gst_rate),
-    volumetric_divisor: Number(row.volumetric_divisor),
+    volumetric_divisor: Number(
+      row.volumetric_divisor || DEFAULT_SHIPPING_SETTINGS.volumetric_divisor,
+    ),
     tax_mode: row.tax_mode ?? DEFAULT_SHIPPING_SETTINGS.tax_mode,
     economy_enabled: Boolean(row.economy_enabled),
     standard_enabled: Boolean(row.standard_enabled),
@@ -57,12 +67,40 @@ export async function loadShippingSettings(
     quote_validity_hours: Number(
       row.quote_validity_hours ?? DEFAULT_SHIPPING_SETTINGS.quote_validity_hours,
     ),
+    aramex_fuel_surcharge_percent: Number(
+      row.aramex_fuel_surcharge_percent ??
+        DEFAULT_SHIPPING_SETTINGS.aramex_fuel_surcharge_percent,
+    ),
+    base_rate_source:
+      row.base_rate_source === "aramex_api" ? "aramex_api" : "admin_table",
   };
+}
+
+export async function loadIndiRouteFeeSlabs(
+  db: SupabaseClient,
+): Promise<WeightFeeSlab[]> {
+  const { data, error } = await db
+    .from("shipping_indiroute_fee_slabs")
+    .select("min_kg, max_kg, fee_inr")
+    .eq("active", true)
+    .order("min_kg", { ascending: true });
+
+  if (error || !data || data.length === 0) {
+    // Fallback to legacy packing slabs table if new table not migrated yet
+    const legacy = await loadPackingFeeSlabs(db);
+    return legacy.length > 0 ? legacy : DEFAULT_INDIROUTE_FEE_SLABS.map((s) => ({ ...s }));
+  }
+
+  return data.map((row) => ({
+    min_kg: Number(row.min_kg),
+    max_kg: row.max_kg == null ? null : Number(row.max_kg),
+    fee_inr: Number(row.fee_inr),
+  }));
 }
 
 export async function loadPackingFeeSlabs(
   db: SupabaseClient,
-): Promise<PackingFeeSlab[]> {
+): Promise<WeightFeeSlab[]> {
   const { data, error } = await db
     .from("shipping_packing_fee_slabs")
     .select("min_kg, max_kg, fee_inr")
@@ -70,13 +108,34 @@ export async function loadPackingFeeSlabs(
     .order("min_kg", { ascending: true });
 
   if (error || !data || data.length === 0) {
-    return DEFAULT_PACKING_FEE_SLABS.map((slab) => ({ ...slab }));
+    return DEFAULT_INDIROUTE_FEE_SLABS.map((slab) => ({ ...slab }));
   }
 
   return data.map((row) => ({
     min_kg: Number(row.min_kg),
     max_kg: row.max_kg == null ? null : Number(row.max_kg),
     fee_inr: Number(row.fee_inr),
+  }));
+}
+
+export async function loadMarginBrackets(
+  db: SupabaseClient,
+): Promise<MarginBracket[]> {
+  const { data, error } = await db
+    .from("shipping_margin_brackets")
+    .select("min_amount_inr, max_amount_inr, margin_percent")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
+
+  if (error || !data || data.length === 0) {
+    return DEFAULT_MARGIN_BRACKETS.map((b) => ({ ...b }));
+  }
+
+  return data.map((row) => ({
+    min_amount_inr: Number(row.min_amount_inr),
+    max_amount_inr:
+      row.max_amount_inr == null ? null : Number(row.max_amount_inr),
+    margin_percent: Number(row.margin_percent),
   }));
 }
 
@@ -177,3 +236,5 @@ export async function loadActiveRatesForCountry(
     active: Boolean(row.active),
   }));
 }
+
+export { loadAramexBaseRates };

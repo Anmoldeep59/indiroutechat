@@ -30,6 +30,7 @@ export type ServiceCandidate = {
   role: ServiceCandidateRole;
 };
 
+/** Legacy ratecard row (kept for import/audit; not used for Aramex-style selling price). */
 export type ShippingRateRow = {
   id?: string;
   country_code: string;
@@ -49,13 +50,38 @@ export type ShippingRateRow = {
   active: boolean;
 };
 
-export type PackingFeeSlab = {
+export type AramexBaseRateRow = {
+  id?: string;
+  country_code: string;
+  country_name: string;
+  service_tier: CustomerServiceTier;
+  min_weight_kg: number;
+  max_weight_kg: number | null;
+  base_aramex_rate: number;
+  currency: string;
+  source_sla: string | null;
+  active: boolean;
+};
+
+export type WeightFeeSlab = {
   min_kg: number;
   max_kg: number | null;
   fee_inr: number;
 };
 
+/** @deprecated Use WeightFeeSlab / IndiRoute fee slabs */
+export type PackingFeeSlab = WeightFeeSlab;
+
+export type MarginBracket = {
+  min_amount_inr: number;
+  max_amount_inr: number | null;
+  margin_percent: number;
+};
+
+export type BaseRateSource = "admin_table" | "aramex_api";
+
 export type ShippingSettings = {
+  /** Legacy field retained for DB compatibility; unused by Aramex-style formula. */
   shipping_markup_percent: number;
   handling_fee_inr: number;
   service_fee_inr: number;
@@ -68,6 +94,8 @@ export type ShippingSettings = {
   final_price_round_to_inr: number;
   currency: string;
   quote_validity_hours: number;
+  aramex_fuel_surcharge_percent: number;
+  base_rate_source: BaseRateSource;
 };
 
 export type QuoteRequestInput = {
@@ -85,11 +113,16 @@ export type SelectedSourceRate = {
   countryCode: string;
   countryName: string;
   customerTier: CustomerServiceTier;
+  /** Internal label for audit (admin table / future API). */
   sourceServiceId: number;
   sourceServiceName: string;
   sourceSla: string;
   weightSlabKg: number;
+  /** Base Aramex rate used for pricing (never shown to customers). */
   safeSourceRate: number;
+  baseAramexRate: number;
+  minWeightKg: number;
+  maxWeightKg: number | null;
   planRates: {
     lite: number | null;
     basic: number | null;
@@ -101,13 +134,22 @@ export type SelectedSourceRate = {
 };
 
 export type PricedQuoteBreakdown = {
+  baseAramexRate: number;
+  /** Alias of baseAramexRate for older callers */
   sourceRate: number;
-  shippingCharge: number;
+  fuelSurchargePercent: number;
+  fuelCharge: number;
+  aramexLandedCost: number;
+  marginPercent: number;
+  shippingSellingPrice: number;
+  indiRouteFee: number;
+  /** @deprecated mapped to indiRouteFee for compatibility */
+  packingFee: number;
   handlingFee: number;
   serviceFee: number;
-  packingFee: number;
   gst: number;
   feeSubtotal: number;
+  shippingCharge: number;
   preRoundTotal: number;
   finalPrice: number;
   currency: string;

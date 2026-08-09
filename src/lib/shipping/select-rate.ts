@@ -74,6 +74,9 @@ function rowToSelected(
     sourceSla: candidate.sourceSla || row.source_sla || "Business Days TBA",
     weightSlabKg: Number(row.weight_kg),
     safeSourceRate: safe,
+    baseAramexRate: safe,
+    minWeightKg: Number(row.weight_kg),
+    maxWeightKg: Number(row.weight_kg),
     planRates: {
       lite: row.lite_rate,
       basic: row.basic_rate,

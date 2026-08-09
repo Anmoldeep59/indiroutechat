@@ -1,89 +1,90 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHIPPING_COUNTRIES } from "./countries";
-import { DEFAULT_PACKING_FEE_SLABS, DEFAULT_SHIPPING_SETTINGS } from "./defaults";
+import {
+  DEFAULT_INDIROUTE_FEE_SLABS,
+  DEFAULT_MARGIN_BRACKETS,
+  DEFAULT_SHIPPING_SETTINGS,
+} from "./defaults";
 import {
   buildQuote,
   QuoteBuildError,
   toPublicQuote,
   type QuoteBuildContext,
 } from "./quote-builder";
-import { generateSeedRates } from "./seed-rates";
-import { getDefaultServiceMap } from "./service-map";
 import {
-  loadActiveRatesForCountry,
+  loadAramexBaseRates,
   loadEnabledCountryCodes,
-  loadPackingFeeSlabs,
-  loadServiceMap,
+  loadIndiRouteFeeSlabs,
+  loadMarginBrackets,
   loadShippingSettings,
 } from "./settings";
 import type { QuoteRequestInput, QuoteResult } from "./types";
 
 export { QuoteBuildError, toPublicQuote };
 
-function buildOfflineQuoteContext(countryCode: string): QuoteBuildContext {
-  const code = countryCode.trim().toUpperCase();
+function buildOfflineQuoteContext(): QuoteBuildContext {
   return {
-    rates: generateSeedRates().filter(
-      (row) => row.country_code.toUpperCase() === code,
-    ),
+    // Never invent base rates offline — admin must enter them.
+    baseRates: [],
     settings: { ...DEFAULT_SHIPPING_SETTINGS },
-    packingSlabs: DEFAULT_PACKING_FEE_SLABS.map((slab) => ({ ...slab })),
-    serviceMap: getDefaultServiceMap(code),
+    feeSlabs: DEFAULT_INDIROUTE_FEE_SLABS.map((slab) => ({ ...slab })),
+    marginBrackets: DEFAULT_MARGIN_BRACKETS.map((b) => ({ ...b })),
     enabledCountryCodes: new Set(SHIPPING_COUNTRIES.map((c) => c.code)),
   };
 }
 
 /**
- * Authoritative quote. Uses Supabase when configured; otherwise falls back to
- * in-memory seed rates so the public calculator still works during setup.
+ * Authoritative quote using Aramex-style pricing.
+ * BaseAramexRate comes from admin table (or future API), never the browser.
  */
 export async function createShippingQuote(
   db: SupabaseClient | null,
   input: QuoteRequestInput,
-  options?: { includeAdminDetails?: boolean },
+  options?: {
+    includeAdminDetails?: boolean;
+    indiRouteFeeOverride?: number | null;
+  },
 ): Promise<QuoteResult & { adminOptions?: QuoteResult["options"] }> {
   const countryCode = input.countryCode.trim().toUpperCase();
 
   if (!db) {
     console.warn(
-      "[shipping/quote] Supabase admin unavailable — using in-memory seed rates.",
+      "[shipping/quote] Supabase admin unavailable — cannot load Aramex base rates.",
     );
-    return buildQuote(input, buildOfflineQuoteContext(countryCode), options);
+    return buildQuote(
+      input,
+      {
+        ...buildOfflineQuoteContext(),
+        indiRouteFeeOverride: options?.indiRouteFeeOverride,
+      },
+      options,
+    );
   }
 
   try {
-    const [settings, packingSlabs, enabledCountries, serviceMap, rates] =
+    const [settings, feeSlabs, marginBrackets, enabledCountries, baseRates] =
       await Promise.all([
         loadShippingSettings(db),
-        loadPackingFeeSlabs(db),
+        loadIndiRouteFeeSlabs(db),
+        loadMarginBrackets(db),
         loadEnabledCountryCodes(db),
-        loadServiceMap(db, countryCode),
-        loadActiveRatesForCountry(db, countryCode),
+        loadAramexBaseRates(db, countryCode),
       ]);
 
-    // If migration/rates are not loaded yet, fall back to seed data.
-    if (rates.length === 0) {
-      console.warn(
-        `[shipping/quote] No DB rates for ${countryCode} — using in-memory seed rates.`,
-      );
-      return buildQuote(input, buildOfflineQuoteContext(countryCode), options);
-    }
-
     const context: QuoteBuildContext = {
-      rates,
+      baseRates,
       settings,
-      packingSlabs,
-      serviceMap,
+      feeSlabs,
+      marginBrackets,
       enabledCountryCodes: enabledCountries,
+      indiRouteFeeOverride: options?.indiRouteFeeOverride,
     };
 
     return buildQuote(input, context, options);
   } catch (error) {
-    console.error(
-      "[shipping/quote] DB quote failed — falling back to seed rates.",
-      error,
-    );
-    return buildQuote(input, buildOfflineQuoteContext(countryCode), options);
+    if (error instanceof QuoteBuildError) throw error;
+    console.error("[shipping/quote] DB quote failed", error);
+    throw error;
   }
 }
 
@@ -97,7 +98,9 @@ export function parseQuoteRequestBody(body: unknown): QuoteRequestInput {
     data.countryCode ?? data.destinationCountry ?? data.country ?? "",
   ).trim();
 
-  const actualWeightKg = Number(data.actualWeightKg ?? data.weightKg ?? data.weight);
+  const actualWeightKg = Number(
+    data.actualWeightKg ?? data.weightKg ?? data.weight,
+  );
   const lengthCm = Number(data.lengthCm ?? data.length ?? 0);
   const widthCm = Number(data.widthCm ?? data.width ?? 0);
   const heightCm = Number(data.heightCm ?? data.height ?? 0);

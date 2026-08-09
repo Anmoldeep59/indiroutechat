@@ -1,3 +1,4 @@
+export * from "./base-rate";
 export * from "./countries";
 export * from "./defaults";
 export * from "./india-post";

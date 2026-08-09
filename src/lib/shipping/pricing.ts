@@ -1,10 +1,15 @@
-import { DEFAULT_PACKING_FEE_SLABS, DEFAULT_SHIPPING_SETTINGS } from "./defaults";
-import { getPackingFee } from "./packing";
-import { roundUp, roundUpToNearest } from "./money";
+import {
+  DEFAULT_INDIROUTE_FEE_SLABS,
+  DEFAULT_MARGIN_BRACKETS,
+  DEFAULT_SHIPPING_SETTINGS,
+} from "./defaults";
+import { getIndiRouteFee } from "./packing";
+import { roundUpToNearest } from "./money";
 import type {
-  PackingFeeSlab,
+  MarginBracket,
   PricedQuoteBreakdown,
   ShippingSettings,
+  WeightFeeSlab,
 } from "./types";
 
 export class PricingSafetyError extends Error {
@@ -14,111 +19,136 @@ export class PricingSafetyError extends Error {
   }
 }
 
-export function applyShippingMarkup(
-  sourceRate: number,
-  markupPercent: number,
-): number {
-  if (!Number.isFinite(sourceRate) || sourceRate < 0) {
-    throw new Error("Invalid source rate.");
+/** Standard 2-decimal money (half-up). Final customer price uses round-up separately. */
+function roundMoney(value: number, decimals = 2): number {
+  if (!Number.isFinite(value)) {
+    throw new Error("Cannot round a non-finite value.");
   }
-  if (!Number.isFinite(markupPercent) || markupPercent < 0) {
-    throw new Error("Invalid markup percent.");
-  }
-
-  const raw = sourceRate * (1 + markupPercent / 100);
-  return roundUp(raw, 2);
+  const factor = 10 ** decimals;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
 }
 
-export function calculateGst(
-  taxableAmount: number,
-  gstRate: number,
-  taxMode: ShippingSettings["tax_mode"],
+export function selectMarginPercent(
+  aramexLandedCost: number,
+  brackets: MarginBracket[] = DEFAULT_MARGIN_BRACKETS,
 ): number {
-  if (taxMode === "gst_none") return 0;
-  if (!Number.isFinite(taxableAmount) || taxableAmount < 0) {
-    throw new Error("Invalid taxable amount.");
+  if (!Number.isFinite(aramexLandedCost) || aramexLandedCost < 0) {
+    throw new Error("Invalid Aramex landed cost for margin selection.");
   }
-  if (!Number.isFinite(gstRate) || gstRate < 0) {
-    throw new Error("Invalid GST rate.");
+
+  const ordered = [...brackets].sort(
+    (a, b) => a.min_amount_inr - b.min_amount_inr,
+  );
+
+  for (const bracket of ordered) {
+    const minOk = aramexLandedCost + Number.EPSILON >= bracket.min_amount_inr;
+    const maxOk =
+      bracket.max_amount_inr == null
+        ? true
+        : aramexLandedCost <= bracket.max_amount_inr + Number.EPSILON;
+    if (minOk && maxOk) {
+      return bracket.margin_percent;
+    }
   }
-  return roundUp(taxableAmount * gstRate, 2);
+
+  return ordered[ordered.length - 1]?.margin_percent ?? 0;
 }
 
 /**
- * Authoritative IndiRoute selling price.
- * Never trust browser-supplied price fields.
+ * Aramex-style IndiRoute selling price.
+ * BaseAramexRate must come from admin table or future Aramex API — never the browser.
  */
 export function calculateCustomerPrice(
-  sourceRate: number,
+  baseAramexRate: number,
   chargeableWeightKg: number,
   settings: ShippingSettings = DEFAULT_SHIPPING_SETTINGS,
-  packingSlabs: PackingFeeSlab[] = DEFAULT_PACKING_FEE_SLABS,
+  feeSlabs: WeightFeeSlab[] = DEFAULT_INDIROUTE_FEE_SLABS,
+  marginBrackets: MarginBracket[] = DEFAULT_MARGIN_BRACKETS,
+  indiRouteFeeOverride?: number | null,
 ): PricedQuoteBreakdown {
-  const shippingCharge = applyShippingMarkup(
-    sourceRate,
-    settings.shipping_markup_percent,
+  if (!Number.isFinite(baseAramexRate) || baseAramexRate < 0) {
+    throw new Error("Invalid BaseAramexRate.");
+  }
+
+  const fuelSurchargePercent = Number(settings.aramex_fuel_surcharge_percent);
+  if (!Number.isFinite(fuelSurchargePercent) || fuelSurchargePercent < 0) {
+    throw new Error("Invalid Aramex fuel surcharge percent.");
+  }
+
+  const fuelCharge = roundMoney(
+    baseAramexRate * (fuelSurchargePercent / 100),
+    2,
   );
-  const minimumAllowed = roundUp(
-    sourceRate * (1 + settings.shipping_markup_percent / 100),
+  const aramexLandedCost = roundMoney(baseAramexRate + fuelCharge, 2);
+  const marginPercent = selectMarginPercent(aramexLandedCost, marginBrackets);
+  const shippingSellingPrice = roundMoney(
+    aramexLandedCost * (1 + marginPercent / 100),
     2,
   );
 
-  if (shippingCharge + Number.EPSILON < minimumAllowed) {
-    console.error("[shipping] shippingCharge below floor", {
-      sourceRate,
-      shippingCharge,
-      minimumAllowed,
-    });
-    throw new PricingSafetyError(
-      "Shipping charge fell below the required markup floor.",
-    );
-  }
+  const indiRouteFee =
+    indiRouteFeeOverride != null && Number.isFinite(indiRouteFeeOverride)
+      ? Number(indiRouteFeeOverride)
+      : getIndiRouteFee(chargeableWeightKg, feeSlabs);
 
-  const handlingFee = settings.handling_fee_inr;
-  const serviceFee = settings.service_fee_inr;
-  const packingFee = getPackingFee(chargeableWeightKg, packingSlabs);
-  const feeSubtotal = handlingFee + serviceFee + packingFee;
-
-  let gstTaxable = 0;
-  if (settings.tax_mode === "gst_on_indiroute_fees_only") {
-    gstTaxable = feeSubtotal;
-  } else if (settings.tax_mode === "gst_on_all") {
-    gstTaxable = shippingCharge + feeSubtotal;
-  }
-
-  const gst = calculateGst(gstTaxable, settings.gst_rate, settings.tax_mode);
-  const preRoundTotal =
-    shippingCharge + handlingFee + serviceFee + packingFee + gst;
+  const preRoundTotal = roundMoney(shippingSellingPrice + indiRouteFee, 2);
   const finalPrice = roundUpToNearest(
     preRoundTotal,
     settings.final_price_round_to_inr,
   );
 
+  const minimumAllowed = shippingSellingPrice;
+
   if (finalPrice + Number.EPSILON < minimumAllowed) {
-    console.error("[shipping] finalPrice below sourceRate markup floor", {
-      sourceRate,
+    console.error("[shipping] finalPrice below shipping selling price", {
+      baseAramexRate,
+      shippingSellingPrice,
       finalPrice,
-      minimumAllowed,
       preRoundTotal,
     });
     throw new PricingSafetyError(
-      "Final customer price fell below sourceRate × markup floor.",
+      "Final customer price fell below ShippingSellingPrice floor.",
+    );
+  }
+
+  if (finalPrice + Number.EPSILON < aramexLandedCost) {
+    console.error("[shipping] finalPrice below Aramex landed cost", {
+      aramexLandedCost,
+      finalPrice,
+    });
+    throw new PricingSafetyError(
+      "Final customer price fell below Aramex landed cost.",
     );
   }
 
   return {
-    sourceRate,
-    shippingCharge,
-    handlingFee,
-    serviceFee,
-    packingFee,
-    gst,
-    feeSubtotal,
+    baseAramexRate,
+    sourceRate: baseAramexRate,
+    fuelSurchargePercent,
+    fuelCharge,
+    aramexLandedCost,
+    marginPercent,
+    shippingSellingPrice,
+    indiRouteFee,
+    packingFee: indiRouteFee,
+    handlingFee: 0,
+    serviceFee: 0,
+    gst: 0,
+    feeSubtotal: indiRouteFee,
+    shippingCharge: shippingSellingPrice,
     preRoundTotal,
     finalPrice,
     currency: settings.currency,
-    markupPercent: settings.shipping_markup_percent,
+    markupPercent: marginPercent,
     gstRate: settings.gst_rate,
     minimumAllowed,
   };
+}
+
+/** @deprecated kept for callers that still import the old helper name */
+export function applyShippingMarkup(
+  sourceRate: number,
+  markupPercent: number,
+): number {
+  return roundMoney(sourceRate * (1 + markupPercent / 100), 2);
 }
