@@ -1,12 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { SHIPPING_COUNTRIES } from "./countries";
-import {
-  DEFAULT_HANDLING_FEE_SLABS,
-  DEFAULT_MARGIN_BRACKETS,
-  DEFAULT_REPACKING_FEE_SLABS,
-  DEFAULT_SERVICE_FEE_SLABS,
-  DEFAULT_SHIPPING_SETTINGS,
-} from "./defaults";
 import {
   buildQuote,
   QuoteBuildError,
@@ -23,20 +15,6 @@ import {
 import type { QuoteRequestInput, QuoteResult } from "./types";
 
 export { QuoteBuildError, toPublicQuote };
-
-function buildOfflineQuoteContext(): QuoteBuildContext {
-  return {
-    baseRates: [],
-    settings: { ...DEFAULT_SHIPPING_SETTINGS },
-    feeSlabs: {
-      handling: DEFAULT_HANDLING_FEE_SLABS.map((s) => ({ ...s })),
-      service: DEFAULT_SERVICE_FEE_SLABS.map((s) => ({ ...s })),
-      repacking: DEFAULT_REPACKING_FEE_SLABS.map((s) => ({ ...s })),
-    },
-    marginBrackets: DEFAULT_MARGIN_BRACKETS.map((b) => ({ ...b })),
-    enabledCountryCodes: new Set(SHIPPING_COUNTRIES.map((c) => c.code)),
-  };
-}
 
 /**
  * Authoritative quote using Aramex base transport rates.
@@ -59,13 +37,9 @@ export async function createShippingQuote(
     console.warn(
       "[shipping/quote] Supabase admin unavailable — cannot load Aramex base rates.",
     );
-    return buildQuote(
-      input,
-      {
-        ...buildOfflineQuoteContext(),
-        feeOverrides: { packingFeeOverride: packingOverride },
-      },
-      options,
+    throw new QuoteBuildError(
+      "missing_rates",
+      "Shipping quotes require Supabase to be configured (SUPABASE_SERVICE_ROLE_KEY) and Aramex base rates entered in Admin → Shipping Rates.",
     );
   }
 
