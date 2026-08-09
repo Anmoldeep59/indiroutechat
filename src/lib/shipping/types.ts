@@ -139,14 +139,20 @@ export type PricedQuoteBreakdown = {
   sourceRate: number;
   fuelSurchargePercent: number;
   fuelCharge: number;
+  aramexFuelSurcharge: number;
+  /** @deprecated alias of aramexTransportCost */
   aramexLandedCost: number;
+  aramexTransportCost: number;
   marginPercent: number;
+  /** @deprecated alias of indiRouteTransportPrice */
   shippingSellingPrice: number;
-  indiRouteFee: number;
-  /** @deprecated mapped to indiRouteFee for compatibility */
-  packingFee: number;
+  indiRouteTransportPrice: number;
   handlingFee: number;
   serviceFee: number;
+  packingFee: number;
+  repackingFee: number;
+  /** Sum of handling + service + packing (internal) */
+  indiRouteFee: number;
   gst: number;
   feeSubtotal: number;
   shippingCharge: number;

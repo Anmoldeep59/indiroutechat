@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useAuthState } from "@/hooks/useAuthState";
+import {
+  DEFAULT_HANDLING_FEE_SLABS,
+  DEFAULT_REPACKING_FEE_SLABS,
+  DEFAULT_SERVICE_FEE_SLABS,
+} from "@/lib/shipping/defaults";
 import type {
   MarginBracket,
   ShippingSettings,
@@ -13,17 +18,15 @@ type AdminRate = {
   countryCode: string;
   countryName: string;
   customerServiceTier: string | null;
-  sourceServiceName: string;
   sourceSla: string | null;
   minWeightKg: number;
   maxWeightKg: number | null;
-  weightSlabKg: number;
   baseAramexRate: number;
-  sourceRate: number;
   fuelCharge: number | null;
-  aramexLandedCost: number | null;
+  aramexTransportCost: number | null;
   shippingCharge: number | null;
-  indiRouteFee: number | null;
+  handlingFee: number | null;
+  serviceFee: number | null;
   packingFee: number | null;
   finalCustomerPrice: number | null;
   active: boolean;
@@ -55,7 +58,6 @@ type NewBaseRateForm = {
   maxWeightKg: string;
   baseAramexRate: string;
   currency: string;
-  sourceSla: string;
   active: boolean;
 };
 
@@ -71,16 +73,112 @@ const emptyBaseRateForm = (countryCode = "AU"): NewBaseRateForm => ({
   maxWeightKg: "0.5",
   baseAramexRate: "",
   currency: "INR",
-  sourceSla: "",
   active: true,
 });
+
+function FeeSlabEditor({
+  title,
+  description,
+  slabs,
+  onChange,
+}: {
+  title: string;
+  description: string;
+  slabs: WeightFeeSlab[];
+  onChange: (next: WeightFeeSlab[]) => void;
+}) {
+  return (
+    <div>
+      <h2 className="font-display text-lg font-bold text-brand">{title}</h2>
+      <p className="mt-1 text-sm text-brand-muted">{description}</p>
+      <div className="mt-3 space-y-3">
+        {slabs.map((slab, index) => (
+          <div
+            key={`${title}-${slab.min_kg}-${index}`}
+            className="grid gap-3 sm:grid-cols-3"
+          >
+            <div>
+              <label className={labelClassName}>From kg</label>
+              <input
+                type="number"
+                step="any"
+                className={fieldClassName}
+                value={slab.min_kg}
+                onChange={(event) => {
+                  const next = [...slabs];
+                  next[index] = { ...slab, min_kg: Number(event.target.value) };
+                  onChange(next);
+                }}
+              />
+            </div>
+            <div>
+              <label className={labelClassName}>To kg</label>
+              <input
+                type="number"
+                step="any"
+                className={fieldClassName}
+                value={slab.max_kg ?? ""}
+                placeholder="No max"
+                onChange={(event) => {
+                  const next = [...slabs];
+                  next[index] = {
+                    ...slab,
+                    max_kg:
+                      event.target.value === ""
+                        ? null
+                        : Number(event.target.value),
+                  };
+                  onChange(next);
+                }}
+              />
+            </div>
+            <div>
+              <label className={labelClassName}>Fee ₹</label>
+              <input
+                type="number"
+                step="any"
+                className={fieldClassName}
+                value={slab.fee_inr}
+                onChange={(event) => {
+                  const next = [...slabs];
+                  next[index] = {
+                    ...slab,
+                    fee_inr: Number(event.target.value),
+                  };
+                  onChange(next);
+                }}
+              />
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="text-sm font-semibold text-brand underline-offset-2 hover:underline"
+          onClick={() =>
+            onChange([...slabs, { min_kg: 0, max_kg: null, fee_inr: 0 }])
+          }
+        >
+          Add slab
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function ShippingRatesAdmin() {
   const { user } = useAuthState();
   const [tab, setTab] = useState<"rates" | "settings" | "mappings">("rates");
   const [rates, setRates] = useState<AdminRate[]>([]);
   const [settings, setSettings] = useState<ShippingSettings | null>(null);
-  const [feeSlabs, setFeeSlabs] = useState<WeightFeeSlab[]>([]);
+  const [handlingFeeSlabs, setHandlingFeeSlabs] = useState<WeightFeeSlab[]>(
+    DEFAULT_HANDLING_FEE_SLABS,
+  );
+  const [serviceFeeSlabs, setServiceFeeSlabs] = useState<WeightFeeSlab[]>(
+    DEFAULT_SERVICE_FEE_SLABS,
+  );
+  const [repackingFeeSlabs, setRepackingFeeSlabs] = useState<WeightFeeSlab[]>(
+    DEFAULT_REPACKING_FEE_SLABS,
+  );
   const [marginBrackets, setMarginBrackets] = useState<MarginBracket[]>([]);
   const [countries, setCountries] = useState<CountryRow[]>([]);
   const [mappings, setMappings] = useState<MappingRow[]>([]);
@@ -118,7 +216,9 @@ export function ShippingRatesAdmin() {
     });
     const payload = (await response.json()) as {
       settings?: ShippingSettings;
-      feeSlabs?: WeightFeeSlab[];
+      handlingFeeSlabs?: WeightFeeSlab[];
+      serviceFeeSlabs?: WeightFeeSlab[];
+      repackingFeeSlabs?: WeightFeeSlab[];
       packingSlabs?: WeightFeeSlab[];
       marginBrackets?: MarginBracket[];
       countries?: CountryRow[];
@@ -129,7 +229,15 @@ export function ShippingRatesAdmin() {
       throw new Error(payload.error || "Unable to load settings.");
     }
     setSettings(payload.settings ?? null);
-    setFeeSlabs(payload.feeSlabs ?? payload.packingSlabs ?? []);
+    setHandlingFeeSlabs(
+      payload.handlingFeeSlabs ?? DEFAULT_HANDLING_FEE_SLABS,
+    );
+    setServiceFeeSlabs(payload.serviceFeeSlabs ?? DEFAULT_SERVICE_FEE_SLABS);
+    setRepackingFeeSlabs(
+      payload.repackingFeeSlabs ??
+        payload.packingSlabs ??
+        DEFAULT_REPACKING_FEE_SLABS,
+    );
     setMarginBrackets(payload.marginBrackets ?? []);
     setCountries(payload.countries ?? []);
     setMappings(payload.mappings ?? []);
@@ -173,7 +281,9 @@ export function ShippingRatesAdmin() {
         },
         body: JSON.stringify({
           settings,
-          feeSlabs,
+          handlingFeeSlabs,
+          serviceFeeSlabs,
+          repackingFeeSlabs,
           marginBrackets,
           countries: countries.map((c) => ({
             country_code: c.country_code,
@@ -218,7 +328,6 @@ export function ShippingRatesAdmin() {
               : Number(newRate.maxWeightKg),
           baseAramexRate: Number(newRate.baseAramexRate),
           currency: newRate.currency || "INR",
-          sourceSla: newRate.sourceSla || null,
           active: newRate.active,
         }),
       });
@@ -226,7 +335,7 @@ export function ShippingRatesAdmin() {
       if (!response.ok) {
         throw new Error(payload.error || "Unable to save base rate.");
       }
-      setMessage("Aramex base rate saved. No invented rates were auto-filled.");
+      setMessage("Aramex base rate saved.");
       setNewRate(emptyBaseRateForm(newRate.countryCode));
       await loadRates();
     } catch (err) {
@@ -281,8 +390,9 @@ export function ShippingRatesAdmin() {
           Shipping Rates & Settings
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-brand-muted">
-          Aramex-style pricing: enter Base Aramex rates manually until the live
-          API is connected. Customers never see fuel, margin, or supplier cost.
+          Enter actual Aramex base rates. Fuel, margin, and IndiRoute fees apply
+          server-side. Economy/Standard delivery estimates stay on the existing
+          SLA map — not from Aramex.
         </p>
 
         <div className="mt-5 flex flex-wrap gap-2">
@@ -290,7 +400,7 @@ export function ShippingRatesAdmin() {
             [
               ["rates", "Base Aramex rates"],
               ["settings", "Pricing settings"],
-              ["mappings", "Service mapping"],
+              ["mappings", "SLA / service mapping"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -331,8 +441,7 @@ export function ShippingRatesAdmin() {
               Add Aramex base rate
             </h2>
             <p className="text-sm text-brand-muted">
-              Enter real Aramex rates only. This table stays empty until you add
-              rows — nothing is invented.
+              Enter real Aramex transportation rates only. Nothing is invented.
             </p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
@@ -412,7 +521,7 @@ export function ShippingRatesAdmin() {
               </div>
               <div>
                 <label className={labelClassName} htmlFor="new-base">
-                  Base Aramex rate (₹)
+                  Actual Aramex base rate (₹)
                 </label>
                 <input
                   id="new-base"
@@ -440,20 +549,6 @@ export function ShippingRatesAdmin() {
                   value={newRate.currency}
                   onChange={(event) =>
                     setNewRate({ ...newRate, currency: event.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className={labelClassName} htmlFor="new-sla">
-                  Estimated delivery (optional)
-                </label>
-                <input
-                  id="new-sla"
-                  className={fieldClassName}
-                  value={newRate.sourceSla}
-                  placeholder="e.g. 10–15 Business Days"
-                  onChange={(event) =>
-                    setNewRate({ ...newRate, sourceSla: event.target.value })
                   }
                 />
               </div>
@@ -520,11 +615,10 @@ export function ShippingRatesAdmin() {
                   <th className="px-2 py-2 font-semibold">Weight</th>
                   <th className="px-2 py-2 font-semibold">Base</th>
                   <th className="px-2 py-2 font-semibold">Fuel</th>
-                  <th className="px-2 py-2 font-semibold">Landed</th>
-                  <th className="px-2 py-2 font-semibold">Selling</th>
-                  <th className="px-2 py-2 font-semibold">IndiRoute fee</th>
+                  <th className="px-2 py-2 font-semibold">Transport</th>
+                  <th className="px-2 py-2 font-semibold">+Margin</th>
+                  <th className="px-2 py-2 font-semibold">Fees</th>
                   <th className="px-2 py-2 font-semibold">Final</th>
-                  <th className="px-2 py-2 font-semibold">SLA</th>
                   <th className="px-2 py-2 font-semibold" />
                 </tr>
               </thead>
@@ -532,12 +626,11 @@ export function ShippingRatesAdmin() {
                 {rates.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={10}
                       className="px-2 py-6 text-sm text-brand-muted"
                     >
-                      No base rates yet. Add admin-entered Aramex rates above
-                      (or switch to live API later). Quotes will not invent
-                      prices.
+                      No Aramex base rates yet. Quotes stay unavailable until
+                      you add real rates for each country/tier/weight band.
                     </td>
                   </tr>
                 ) : (
@@ -561,8 +654,8 @@ export function ShippingRatesAdmin() {
                         {rate.fuelCharge != null ? `₹${rate.fuelCharge}` : "—"}
                       </td>
                       <td className="px-2 py-2">
-                        {rate.aramexLandedCost != null
-                          ? `₹${rate.aramexLandedCost}`
+                        {rate.aramexTransportCost != null
+                          ? `₹${rate.aramexTransportCost}`
                           : "—"}
                       </td>
                       <td className="px-2 py-2">
@@ -571,8 +664,8 @@ export function ShippingRatesAdmin() {
                           : "—"}
                       </td>
                       <td className="px-2 py-2">
-                        {(rate.indiRouteFee ?? rate.packingFee) != null
-                          ? `₹${rate.indiRouteFee ?? rate.packingFee}`
+                        {rate.handlingFee != null
+                          ? `₹${(rate.handlingFee ?? 0) + (rate.serviceFee ?? 0) + (rate.packingFee ?? 0)}`
                           : "—"}
                       </td>
                       <td className="px-2 py-2 font-semibold text-brand">
@@ -580,7 +673,6 @@ export function ShippingRatesAdmin() {
                           ? `₹${rate.finalCustomerPrice}`
                           : "—"}
                       </td>
-                      <td className="px-2 py-2">{rate.sourceSla ?? "—"}</td>
                       <td className="px-2 py-2">
                         <button
                           type="button"
@@ -627,9 +719,6 @@ export function ShippingRatesAdmin() {
                   })
                 }
               />
-              <p className="mt-1 text-xs text-brand-muted">
-                Update when Aramex publishes a new surcharge (default 23.25).
-              </p>
             </div>
             <div>
               <label className={labelClassName} htmlFor="volumetric_divisor">
@@ -649,9 +738,6 @@ export function ShippingRatesAdmin() {
                   })
                 }
               />
-              <p className="mt-1 text-xs text-brand-muted">
-                (L × W × H) cm ÷ divisor. Default 5000.
-              </p>
             </div>
             <div>
               <label
@@ -691,30 +777,11 @@ export function ShippingRatesAdmin() {
                   })
                 }
               >
-                <option value="admin_table">Admin rate table</option>
+                <option value="admin_table">Admin Aramex rate table</option>
                 <option value="aramex_api">
                   Live Aramex API (falls back to table)
                 </option>
               </select>
-            </div>
-            <div>
-              <label className={labelClassName} htmlFor="quote_validity_hours">
-                Quote validity (hours)
-              </label>
-              <input
-                id="quote_validity_hours"
-                type="number"
-                step="1"
-                min="1"
-                className={fieldClassName}
-                value={settings.quote_validity_hours}
-                onChange={(event) =>
-                  setSettings({
-                    ...settings,
-                    quote_validity_hours: Number(event.target.value),
-                  })
-                }
-              />
             </div>
           </div>
 
@@ -746,7 +813,7 @@ export function ShippingRatesAdmin() {
               IndiRoute margin brackets
             </h2>
             <p className="mt-1 text-sm text-brand-muted">
-              Applied to AramexLandedCost (base + fuel).
+              Applied to AramexTransportCost (base + fuel).
             </p>
             <div className="mt-3 space-y-3">
               {marginBrackets.map((bracket, index) => (
@@ -811,110 +878,27 @@ export function ShippingRatesAdmin() {
                   </div>
                 </div>
               ))}
-              <button
-                type="button"
-                className="text-sm font-semibold text-brand underline-offset-2 hover:underline"
-                onClick={() =>
-                  setMarginBrackets([
-                    ...marginBrackets,
-                    {
-                      min_amount_inr: 0,
-                      max_amount_inr: null,
-                      margin_percent: 8,
-                    },
-                  ])
-                }
-              >
-                Add margin bracket
-              </button>
             </div>
           </div>
 
-          <div>
-            <h2 className="font-display text-lg font-bold text-brand">
-              IndiRoute fee weight slabs
-            </h2>
-            <p className="mt-1 text-sm text-brand-muted">
-              Combined processing fee by chargeable weight (one line on the
-              quote).
-            </p>
-            <div className="mt-3 space-y-3">
-              {feeSlabs.map((slab, index) => (
-                <div
-                  key={`${slab.min_kg}-${index}`}
-                  className="grid gap-3 sm:grid-cols-3"
-                >
-                  <div>
-                    <label className={labelClassName}>From kg</label>
-                    <input
-                      type="number"
-                      step="any"
-                      className={fieldClassName}
-                      value={slab.min_kg}
-                      onChange={(event) => {
-                        const next = [...feeSlabs];
-                        next[index] = {
-                          ...slab,
-                          min_kg: Number(event.target.value),
-                        };
-                        setFeeSlabs(next);
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClassName}>To kg</label>
-                    <input
-                      type="number"
-                      step="any"
-                      className={fieldClassName}
-                      value={slab.max_kg ?? ""}
-                      placeholder="No max"
-                      onChange={(event) => {
-                        const next = [...feeSlabs];
-                        next[index] = {
-                          ...slab,
-                          max_kg:
-                            event.target.value === ""
-                              ? null
-                              : Number(event.target.value),
-                        };
-                        setFeeSlabs(next);
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClassName}>Fee ₹</label>
-                    <input
-                      type="number"
-                      step="any"
-                      className={fieldClassName}
-                      value={slab.fee_inr}
-                      onChange={(event) => {
-                        const next = [...feeSlabs];
-                        next[index] = {
-                          ...slab,
-                          fee_inr: Number(event.target.value),
-                        };
-                        setFeeSlabs(next);
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="text-sm font-semibold text-brand underline-offset-2 hover:underline"
-                onClick={() =>
-                  setFeeSlabs([
-                    ...feeSlabs,
-                    { min_kg: 0, max_kg: null, fee_inr: 0 },
-                  ])
-                }
-              >
-                Add fee slab
-              </button>
-            </div>
-          </div>
+          <FeeSlabEditor
+            title="Handling fee slabs"
+            description="By chargeable weight."
+            slabs={handlingFeeSlabs}
+            onChange={setHandlingFeeSlabs}
+          />
+          <FeeSlabEditor
+            title="Service fee slabs"
+            description="By chargeable weight."
+            slabs={serviceFeeSlabs}
+            onChange={setServiceFeeSlabs}
+          />
+          <FeeSlabEditor
+            title="Repacking fee slabs"
+            description="By chargeable weight."
+            slabs={repackingFeeSlabs}
+            onChange={setRepackingFeeSlabs}
+          />
 
           <div>
             <h2 className="font-display text-lg font-bold text-brand">
@@ -957,9 +941,8 @@ export function ShippingRatesAdmin() {
       {tab === "mappings" ? (
         <section className="overflow-x-auto rounded-xl border border-border bg-surface p-6 sm:p-8">
           <p className="mb-4 text-sm text-brand-muted">
-            Internal SLA / mapping labels for Economy and Standard. Customers
-            only see IndiRoute product names. Base prices come from the Aramex
-            rate table or future API.
+            Existing Economy / Standard delivery-day (SLA) configuration. Pricing
+            uses Aramex base rates; ETA text comes from this map.
           </p>
           <table className="min-w-full text-left text-xs">
             <thead className="border-b border-border text-brand-muted">
@@ -967,9 +950,8 @@ export function ShippingRatesAdmin() {
                 <th className="px-2 py-2">Country</th>
                 <th className="px-2 py-2">Tier</th>
                 <th className="px-2 py-2">Role</th>
-                <th className="px-2 py-2">Service</th>
-                <th className="px-2 py-2">ID</th>
-                <th className="px-2 py-2">SLA</th>
+                <th className="px-2 py-2">Internal label</th>
+                <th className="px-2 py-2">SLA (customer ETA)</th>
               </tr>
             </thead>
             <tbody>
@@ -979,7 +961,6 @@ export function ShippingRatesAdmin() {
                   <td className="px-2 py-2">{row.customer_tier}</td>
                   <td className="px-2 py-2">{row.role}</td>
                   <td className="px-2 py-2">{row.source_service_name}</td>
-                  <td className="px-2 py-2">{row.source_service_id}</td>
                   <td className="px-2 py-2">{row.source_sla}</td>
                 </tr>
               ))}

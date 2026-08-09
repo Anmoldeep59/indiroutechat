@@ -1,9 +1,15 @@
 import {
-  DEFAULT_INDIROUTE_FEE_SLABS,
+  DEFAULT_HANDLING_FEE_SLABS,
   DEFAULT_MARGIN_BRACKETS,
+  DEFAULT_REPACKING_FEE_SLABS,
+  DEFAULT_SERVICE_FEE_SLABS,
   DEFAULT_SHIPPING_SETTINGS,
 } from "./defaults";
-import { getIndiRouteFee } from "./packing";
+import {
+  getHandlingFee,
+  getRepackingFee,
+  getServiceFee,
+} from "./packing";
 import { roundUpToNearest } from "./money";
 import type {
   MarginBracket,
@@ -29,11 +35,11 @@ function roundMoney(value: number, decimals = 2): number {
 }
 
 export function selectMarginPercent(
-  aramexLandedCost: number,
+  aramexTransportCost: number,
   brackets: MarginBracket[] = DEFAULT_MARGIN_BRACKETS,
 ): number {
-  if (!Number.isFinite(aramexLandedCost) || aramexLandedCost < 0) {
-    throw new Error("Invalid Aramex landed cost for margin selection.");
+  if (!Number.isFinite(aramexTransportCost) || aramexTransportCost < 0) {
+    throw new Error("Invalid Aramex transport cost for margin selection.");
   }
 
   const ordered = [...brackets].sort(
@@ -41,11 +47,11 @@ export function selectMarginPercent(
   );
 
   for (const bracket of ordered) {
-    const minOk = aramexLandedCost + Number.EPSILON >= bracket.min_amount_inr;
+    const minOk = aramexTransportCost + Number.EPSILON >= bracket.min_amount_inr;
     const maxOk =
       bracket.max_amount_inr == null
         ? true
-        : aramexLandedCost <= bracket.max_amount_inr + Number.EPSILON;
+        : aramexTransportCost <= bracket.max_amount_inr + Number.EPSILON;
     if (minOk && maxOk) {
       return bracket.margin_percent;
     }
@@ -54,20 +60,37 @@ export function selectMarginPercent(
   return ordered[ordered.length - 1]?.margin_percent ?? 0;
 }
 
+export type FeeSlabSets = {
+  handling: WeightFeeSlab[];
+  service: WeightFeeSlab[];
+  repacking: WeightFeeSlab[];
+};
+
+export type FeeOverrides = {
+  handlingFeeOverride?: number | null;
+  serviceFeeOverride?: number | null;
+  packingFeeOverride?: number | null;
+  repackingFeeOverride?: number | null;
+};
+
 /**
- * Aramex-style IndiRoute selling price.
- * BaseAramexRate must come from admin table or future Aramex API — never the browser.
+ * Aramex transport + IndiRoute fees.
+ * AramexBaseRate must come from admin table or future Aramex API — never the browser.
  */
 export function calculateCustomerPrice(
   baseAramexRate: number,
   chargeableWeightKg: number,
   settings: ShippingSettings = DEFAULT_SHIPPING_SETTINGS,
-  feeSlabs: WeightFeeSlab[] = DEFAULT_INDIROUTE_FEE_SLABS,
+  feeSlabs: FeeSlabSets = {
+    handling: DEFAULT_HANDLING_FEE_SLABS,
+    service: DEFAULT_SERVICE_FEE_SLABS,
+    repacking: DEFAULT_REPACKING_FEE_SLABS,
+  },
   marginBrackets: MarginBracket[] = DEFAULT_MARGIN_BRACKETS,
-  indiRouteFeeOverride?: number | null,
+  overrides?: FeeOverrides,
 ): PricedQuoteBreakdown {
   if (!Number.isFinite(baseAramexRate) || baseAramexRate < 0) {
-    throw new Error("Invalid BaseAramexRate.");
+    throw new Error("Invalid AramexBaseRate.");
   }
 
   const fuelSurchargePercent = Number(settings.aramex_fuel_surcharge_percent);
@@ -75,49 +98,67 @@ export function calculateCustomerPrice(
     throw new Error("Invalid Aramex fuel surcharge percent.");
   }
 
-  const fuelCharge = roundMoney(
+  const aramexFuelSurcharge = roundMoney(
     baseAramexRate * (fuelSurchargePercent / 100),
     2,
   );
-  const aramexLandedCost = roundMoney(baseAramexRate + fuelCharge, 2);
-  const marginPercent = selectMarginPercent(aramexLandedCost, marginBrackets);
-  const shippingSellingPrice = roundMoney(
-    aramexLandedCost * (1 + marginPercent / 100),
+  const aramexTransportCost = roundMoney(
+    baseAramexRate + aramexFuelSurcharge,
+    2,
+  );
+  const marginPercent = selectMarginPercent(aramexTransportCost, marginBrackets);
+  const indiRouteTransportPrice = roundMoney(
+    aramexTransportCost * (1 + marginPercent / 100),
     2,
   );
 
-  const indiRouteFee =
-    indiRouteFeeOverride != null && Number.isFinite(indiRouteFeeOverride)
-      ? Number(indiRouteFeeOverride)
-      : getIndiRouteFee(chargeableWeightKg, feeSlabs);
+  const handlingFee =
+    overrides?.handlingFeeOverride != null &&
+    Number.isFinite(overrides.handlingFeeOverride)
+      ? Number(overrides.handlingFeeOverride)
+      : getHandlingFee(chargeableWeightKg, feeSlabs.handling);
 
-  const preRoundTotal = roundMoney(shippingSellingPrice + indiRouteFee, 2);
+  const serviceFee =
+    overrides?.serviceFeeOverride != null &&
+    Number.isFinite(overrides.serviceFeeOverride)
+      ? Number(overrides.serviceFeeOverride)
+      : getServiceFee(chargeableWeightKg, feeSlabs.service);
+
+  const packingOverride =
+    overrides?.repackingFeeOverride ?? overrides?.packingFeeOverride;
+  const packingFee =
+    packingOverride != null && Number.isFinite(packingOverride)
+      ? Number(packingOverride)
+      : getRepackingFee(chargeableWeightKg, feeSlabs.repacking);
+
+  const feeSubtotal = roundMoney(handlingFee + serviceFee + packingFee, 2);
+  const preRoundTotal = roundMoney(indiRouteTransportPrice + feeSubtotal, 2);
   const finalPrice = roundUpToNearest(
     preRoundTotal,
     settings.final_price_round_to_inr,
   );
 
-  const minimumAllowed = shippingSellingPrice;
+  const minimumAllowed = indiRouteTransportPrice;
 
   if (finalPrice + Number.EPSILON < minimumAllowed) {
-    console.error("[shipping] finalPrice below shipping selling price", {
+    console.error("[shipping] finalPrice below IndiRoute transport price", {
       baseAramexRate,
-      shippingSellingPrice,
+      indiRouteTransportPrice,
       finalPrice,
       preRoundTotal,
     });
     throw new PricingSafetyError(
-      "Final customer price fell below ShippingSellingPrice floor.",
+      "Final customer price fell below IndiRoute transport price floor.",
     );
   }
 
-  if (finalPrice + Number.EPSILON < aramexLandedCost) {
-    console.error("[shipping] finalPrice below Aramex landed cost", {
-      aramexLandedCost,
+  if (finalPrice + Number.EPSILON < aramexTransportCost) {
+    console.error("[shipping] finalPrice below Aramex transport cost", {
+      aramexTransportCost,
       finalPrice,
     });
     throw new PricingSafetyError(
-      "Final customer price fell below Aramex landed cost.",
+      "Final customer price fell below Aramex transport cost.",
     );
   }
 
@@ -125,17 +166,21 @@ export function calculateCustomerPrice(
     baseAramexRate,
     sourceRate: baseAramexRate,
     fuelSurchargePercent,
-    fuelCharge,
-    aramexLandedCost,
+    fuelCharge: aramexFuelSurcharge,
+    aramexFuelSurcharge,
+    aramexLandedCost: aramexTransportCost,
+    aramexTransportCost,
     marginPercent,
-    shippingSellingPrice,
-    indiRouteFee,
-    packingFee: indiRouteFee,
-    handlingFee: 0,
-    serviceFee: 0,
+    shippingSellingPrice: indiRouteTransportPrice,
+    indiRouteTransportPrice,
+    handlingFee,
+    serviceFee,
+    packingFee,
+    repackingFee: packingFee,
+    indiRouteFee: feeSubtotal,
     gst: 0,
-    feeSubtotal: indiRouteFee,
-    shippingCharge: shippingSellingPrice,
+    feeSubtotal,
+    shippingCharge: indiRouteTransportPrice,
     preRoundTotal,
     finalPrice,
     currency: settings.currency,

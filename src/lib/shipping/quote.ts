@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHIPPING_COUNTRIES } from "./countries";
 import {
-  DEFAULT_INDIROUTE_FEE_SLABS,
+  DEFAULT_HANDLING_FEE_SLABS,
   DEFAULT_MARGIN_BRACKETS,
+  DEFAULT_REPACKING_FEE_SLABS,
+  DEFAULT_SERVICE_FEE_SLABS,
   DEFAULT_SHIPPING_SETTINGS,
 } from "./defaults";
 import {
@@ -14,7 +16,7 @@ import {
 import {
   loadAramexBaseRates,
   loadEnabledCountryCodes,
-  loadIndiRouteFeeSlabs,
+  loadFeeSlabSets,
   loadMarginBrackets,
   loadShippingSettings,
 } from "./settings";
@@ -24,28 +26,34 @@ export { QuoteBuildError, toPublicQuote };
 
 function buildOfflineQuoteContext(): QuoteBuildContext {
   return {
-    // Never invent base rates offline — admin must enter them.
     baseRates: [],
     settings: { ...DEFAULT_SHIPPING_SETTINGS },
-    feeSlabs: DEFAULT_INDIROUTE_FEE_SLABS.map((slab) => ({ ...slab })),
+    feeSlabs: {
+      handling: DEFAULT_HANDLING_FEE_SLABS.map((s) => ({ ...s })),
+      service: DEFAULT_SERVICE_FEE_SLABS.map((s) => ({ ...s })),
+      repacking: DEFAULT_REPACKING_FEE_SLABS.map((s) => ({ ...s })),
+    },
     marginBrackets: DEFAULT_MARGIN_BRACKETS.map((b) => ({ ...b })),
     enabledCountryCodes: new Set(SHIPPING_COUNTRIES.map((c) => c.code)),
   };
 }
 
 /**
- * Authoritative quote using Aramex-style pricing.
- * BaseAramexRate comes from admin table (or future API), never the browser.
+ * Authoritative quote using Aramex base transport rates.
+ * Base rate comes from admin table (or future API), never the browser.
+ * Economy/Standard SLAs come from existing service-map configuration.
  */
 export async function createShippingQuote(
   db: SupabaseClient | null,
   input: QuoteRequestInput,
   options?: {
     includeAdminDetails?: boolean;
+    packingFeeOverride?: number | null;
     indiRouteFeeOverride?: number | null;
   },
 ): Promise<QuoteResult & { adminOptions?: QuoteResult["options"] }> {
-  const countryCode = input.countryCode.trim().toUpperCase();
+  const packingOverride =
+    options?.packingFeeOverride ?? options?.indiRouteFeeOverride ?? null;
 
   if (!db) {
     console.warn(
@@ -55,7 +63,7 @@ export async function createShippingQuote(
       input,
       {
         ...buildOfflineQuoteContext(),
-        indiRouteFeeOverride: options?.indiRouteFeeOverride,
+        feeOverrides: { packingFeeOverride: packingOverride },
       },
       options,
     );
@@ -65,10 +73,10 @@ export async function createShippingQuote(
     const [settings, feeSlabs, marginBrackets, enabledCountries, baseRates] =
       await Promise.all([
         loadShippingSettings(db),
-        loadIndiRouteFeeSlabs(db),
+        loadFeeSlabSets(db),
         loadMarginBrackets(db),
         loadEnabledCountryCodes(db),
-        loadAramexBaseRates(db, countryCode),
+        loadAramexBaseRates(db, input.countryCode.trim().toUpperCase()),
       ]);
 
     const context: QuoteBuildContext = {
@@ -77,7 +85,7 @@ export async function createShippingQuote(
       feeSlabs,
       marginBrackets,
       enabledCountryCodes: enabledCountries,
-      indiRouteFeeOverride: options?.indiRouteFeeOverride,
+      feeOverrides: { packingFeeOverride: packingOverride },
     };
 
     return buildQuote(input, context, options);

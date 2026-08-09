@@ -21,23 +21,46 @@ export const DEFAULT_SHIPPING_SETTINGS: ShippingSettings = {
   base_rate_source: "admin_table",
 };
 
+/** Modest margin on AramexTransportCost. */
 export const DEFAULT_MARGIN_BRACKETS: MarginBracket[] = [
-  { min_amount_inr: 0, max_amount_inr: 1000, margin_percent: 15 },
-  { min_amount_inr: 1001, max_amount_inr: 2500, margin_percent: 12 },
-  { min_amount_inr: 2501, max_amount_inr: 5000, margin_percent: 10 },
-  { min_amount_inr: 5000.01, max_amount_inr: null, margin_percent: 8 },
+  { min_amount_inr: 0, max_amount_inr: 1000, margin_percent: 12 },
+  { min_amount_inr: 1001, max_amount_inr: 2500, margin_percent: 10 },
+  { min_amount_inr: 2501, max_amount_inr: 5000, margin_percent: 8 },
+  { min_amount_inr: 5000.01, max_amount_inr: null, margin_percent: 6 },
 ];
 
-/** Combined IndiRoute processing fee by chargeable weight. */
-export const DEFAULT_INDIROUTE_FEE_SLABS: WeightFeeSlab[] = [
-  { min_kg: 0, max_kg: 0.5, fee_inr: 99 },
-  { min_kg: 0.5, max_kg: 1, fee_inr: 129 },
-  { min_kg: 1, max_kg: 2, fee_inr: 169 },
-  { min_kg: 2, max_kg: 5, fee_inr: 249 },
-  { min_kg: 5, max_kg: 10, fee_inr: 399 },
-  { min_kg: 10, max_kg: 20, fee_inr: 599 },
-  { min_kg: 20, max_kg: 30, fee_inr: 799 },
+export const DEFAULT_HANDLING_FEE_SLABS: WeightFeeSlab[] = [
+  { min_kg: 0, max_kg: 0.5, fee_inr: 49 },
+  { min_kg: 0.5, max_kg: 1, fee_inr: 69 },
+  { min_kg: 1, max_kg: 2, fee_inr: 89 },
+  { min_kg: 2, max_kg: 5, fee_inr: 129 },
+  { min_kg: 5, max_kg: 10, fee_inr: 199 },
+  { min_kg: 10, max_kg: 20, fee_inr: 299 },
+  { min_kg: 20, max_kg: 30, fee_inr: 399 },
 ];
 
-/** @deprecated Use DEFAULT_INDIROUTE_FEE_SLABS */
-export const DEFAULT_PACKING_FEE_SLABS = DEFAULT_INDIROUTE_FEE_SLABS;
+export const DEFAULT_SERVICE_FEE_SLABS: WeightFeeSlab[] = [
+  { min_kg: 0, max_kg: 0.5, fee_inr: 79 },
+  { min_kg: 0.5, max_kg: 1, fee_inr: 99 },
+  { min_kg: 1, max_kg: 2, fee_inr: 129 },
+  { min_kg: 2, max_kg: 5, fee_inr: 179 },
+  { min_kg: 5, max_kg: 10, fee_inr: 249 },
+  { min_kg: 10, max_kg: 20, fee_inr: 349 },
+  { min_kg: 20, max_kg: 30, fee_inr: 499 },
+];
+
+export const DEFAULT_REPACKING_FEE_SLABS: WeightFeeSlab[] = [
+  { min_kg: 0, max_kg: 0.5, fee_inr: 49 },
+  { min_kg: 0.5, max_kg: 1, fee_inr: 69 },
+  { min_kg: 1, max_kg: 2, fee_inr: 99 },
+  { min_kg: 2, max_kg: 5, fee_inr: 149 },
+  { min_kg: 5, max_kg: 10, fee_inr: 249 },
+  { min_kg: 10, max_kg: 20, fee_inr: 399 },
+  { min_kg: 20, max_kg: 30, fee_inr: 599 },
+];
+
+/** @deprecated combined fee removed — use separate handling/service/repacking */
+export const DEFAULT_INDIROUTE_FEE_SLABS = DEFAULT_REPACKING_FEE_SLABS;
+
+/** @deprecated Use DEFAULT_REPACKING_FEE_SLABS */
+export const DEFAULT_PACKING_FEE_SLABS = DEFAULT_REPACKING_FEE_SLABS;

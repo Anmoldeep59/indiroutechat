@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAdminUser } from "@/lib/auth-server";
 import {
-  DEFAULT_INDIROUTE_FEE_SLABS,
+  DEFAULT_HANDLING_FEE_SLABS,
   DEFAULT_MARGIN_BRACKETS,
+  DEFAULT_REPACKING_FEE_SLABS,
+  DEFAULT_SERVICE_FEE_SLABS,
 } from "@/lib/shipping/defaults";
 import {
   loadEnabledCountryCodes,
-  loadIndiRouteFeeSlabs,
+  loadFeeSlabSets,
   loadMarginBrackets,
   loadShippingSettings,
 } from "@/lib/shipping/settings";
@@ -16,13 +19,31 @@ import type {
   WeightFeeSlab,
 } from "@/lib/shipping/types";
 
+async function replaceSlabs(
+  db: SupabaseClient,
+  table: string,
+  slabs: WeightFeeSlab[],
+) {
+  await db.from(table).delete().gte("created_at", "1970-01-01");
+  if (slabs.length === 0) return null;
+  const { error } = await db.from(table).insert(
+    slabs.map((slab) => ({
+      min_kg: slab.min_kg,
+      max_kg: slab.max_kg,
+      fee_inr: slab.fee_inr,
+      active: true,
+    })),
+  );
+  return error;
+}
+
 export async function GET(request: Request) {
   const auth = await requireAdminUser(request);
   if (!auth.ok) return auth.response;
 
   const [settings, feeSlabs, marginBrackets, enabled] = await Promise.all([
     loadShippingSettings(auth.db),
-    loadIndiRouteFeeSlabs(auth.db),
+    loadFeeSlabSets(auth.db),
     loadMarginBrackets(auth.db),
     loadEnabledCountryCodes(auth.db),
   ]);
@@ -43,8 +64,11 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     settings,
-    packingSlabs: feeSlabs,
     feeSlabs,
+    handlingFeeSlabs: feeSlabs.handling,
+    serviceFeeSlabs: feeSlabs.service,
+    repackingFeeSlabs: feeSlabs.repacking,
+    packingSlabs: feeSlabs.repacking,
     marginBrackets,
     enabledCountryCodes: [...enabled],
     countries: countries ?? [],
@@ -54,8 +78,10 @@ export async function GET(request: Request) {
 
 type PatchBody = {
   settings?: Partial<ShippingSettings>;
+  handlingFeeSlabs?: WeightFeeSlab[];
+  serviceFeeSlabs?: WeightFeeSlab[];
+  repackingFeeSlabs?: WeightFeeSlab[];
   packingSlabs?: WeightFeeSlab[];
-  feeSlabs?: WeightFeeSlab[];
   marginBrackets?: MarginBracket[];
   countries?: Array<{ country_code: string; enabled: boolean }>;
 };
@@ -99,31 +125,60 @@ export async function PATCH(request: Request) {
     }
   }
 
-  const feeSlabs = body.feeSlabs ?? body.packingSlabs;
-  if (feeSlabs) {
+  if (body.handlingFeeSlabs) {
     const slabs =
-      feeSlabs.length > 0 ? feeSlabs : DEFAULT_INDIROUTE_FEE_SLABS;
-
-    await auth.db
-      .from("shipping_indiroute_fee_slabs")
-      .delete()
-      .gte("created_at", "1970-01-01");
-
-    const { error } = await auth.db.from("shipping_indiroute_fee_slabs").insert(
-      slabs.map((slab) => ({
-        min_kg: slab.min_kg,
-        max_kg: slab.max_kg,
-        fee_inr: slab.fee_inr,
-        active: true,
-      })),
+      body.handlingFeeSlabs.length > 0
+        ? body.handlingFeeSlabs
+        : DEFAULT_HANDLING_FEE_SLABS;
+    const error = await replaceSlabs(
+      auth.db,
+      "shipping_handling_fee_slabs",
+      slabs,
     );
-
     if (error) {
       return NextResponse.json(
-        { error: "Unable to update IndiRoute fee slabs." },
+        { error: "Unable to update handling fee slabs. Run migration 009." },
         { status: 500 },
       );
     }
+  }
+
+  if (body.serviceFeeSlabs) {
+    const slabs =
+      body.serviceFeeSlabs.length > 0
+        ? body.serviceFeeSlabs
+        : DEFAULT_SERVICE_FEE_SLABS;
+    const error = await replaceSlabs(
+      auth.db,
+      "shipping_service_fee_slabs",
+      slabs,
+    );
+    if (error) {
+      return NextResponse.json(
+        { error: "Unable to update service fee slabs. Run migration 009." },
+        { status: 500 },
+      );
+    }
+  }
+
+  const repacking =
+    body.repackingFeeSlabs ?? body.packingSlabs;
+  if (repacking) {
+    const slabs =
+      repacking.length > 0 ? repacking : DEFAULT_REPACKING_FEE_SLABS;
+    const error = await replaceSlabs(
+      auth.db,
+      "shipping_repacking_fee_slabs",
+      slabs,
+    );
+    if (error) {
+      return NextResponse.json(
+        { error: "Unable to update repacking fee slabs. Run migration 009." },
+        { status: 500 },
+      );
+    }
+    // Keep legacy packing table in sync
+    await replaceSlabs(auth.db, "shipping_packing_fee_slabs", slabs);
   }
 
   if (body.marginBrackets) {
@@ -165,12 +220,15 @@ export async function PATCH(request: Request) {
   }
 
   const settings = await loadShippingSettings(auth.db);
-  const nextFeeSlabs = await loadIndiRouteFeeSlabs(auth.db);
+  const feeSlabs = await loadFeeSlabSets(auth.db);
   const marginBrackets = await loadMarginBrackets(auth.db);
   return NextResponse.json({
     settings,
-    packingSlabs: nextFeeSlabs,
-    feeSlabs: nextFeeSlabs,
+    feeSlabs,
+    handlingFeeSlabs: feeSlabs.handling,
+    serviceFeeSlabs: feeSlabs.service,
+    repackingFeeSlabs: feeSlabs.repacking,
+    packingSlabs: feeSlabs.repacking,
     marginBrackets,
     ok: true,
   });

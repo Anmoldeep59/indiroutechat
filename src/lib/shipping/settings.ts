@@ -2,10 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadAramexBaseRates } from "./base-rate";
 import { SHIPPING_COUNTRIES } from "./countries";
 import {
-  DEFAULT_INDIROUTE_FEE_SLABS,
+  DEFAULT_HANDLING_FEE_SLABS,
   DEFAULT_MARGIN_BRACKETS,
+  DEFAULT_REPACKING_FEE_SLABS,
+  DEFAULT_SERVICE_FEE_SLABS,
   DEFAULT_SHIPPING_SETTINGS,
 } from "./defaults";
+import type { FeeSlabSets } from "./pricing";
 import { getDefaultServiceMap } from "./service-map";
 import type { CountryServiceMap } from "./service-map";
 import type {
@@ -33,6 +36,28 @@ type SettingsRow = {
   aramex_fuel_surcharge_percent?: number;
   base_rate_source?: ShippingSettings["base_rate_source"];
 };
+
+async function loadFeeSlabsFromTable(
+  db: SupabaseClient,
+  table: string,
+  fallback: WeightFeeSlab[],
+): Promise<WeightFeeSlab[]> {
+  const { data, error } = await db
+    .from(table)
+    .select("min_kg, max_kg, fee_inr")
+    .eq("active", true)
+    .order("min_kg", { ascending: true });
+
+  if (error || !data || data.length === 0) {
+    return fallback.map((slab) => ({ ...slab }));
+  }
+
+  return data.map((row) => ({
+    min_kg: Number(row.min_kg),
+    max_kg: row.max_kg == null ? null : Number(row.max_kg),
+    fee_inr: Number(row.fee_inr),
+  }));
+}
 
 export async function loadShippingSettings(
   db: SupabaseClient,
@@ -76,46 +101,62 @@ export async function loadShippingSettings(
   };
 }
 
+export async function loadHandlingFeeSlabs(
+  db: SupabaseClient,
+): Promise<WeightFeeSlab[]> {
+  return loadFeeSlabsFromTable(
+    db,
+    "shipping_handling_fee_slabs",
+    DEFAULT_HANDLING_FEE_SLABS,
+  );
+}
+
+export async function loadServiceFeeSlabs(
+  db: SupabaseClient,
+): Promise<WeightFeeSlab[]> {
+  return loadFeeSlabsFromTable(
+    db,
+    "shipping_service_fee_slabs",
+    DEFAULT_SERVICE_FEE_SLABS,
+  );
+}
+
+export async function loadRepackingFeeSlabs(
+  db: SupabaseClient,
+): Promise<WeightFeeSlab[]> {
+  const slabs = await loadFeeSlabsFromTable(
+    db,
+    "shipping_repacking_fee_slabs",
+    [],
+  );
+  if (slabs.length > 0) return slabs;
+  return loadPackingFeeSlabs(db);
+}
+
+export async function loadFeeSlabSets(db: SupabaseClient): Promise<FeeSlabSets> {
+  const [handling, service, repacking] = await Promise.all([
+    loadHandlingFeeSlabs(db),
+    loadServiceFeeSlabs(db),
+    loadRepackingFeeSlabs(db),
+  ]);
+  return { handling, service, repacking };
+}
+
+/** @deprecated Use loadRepackingFeeSlabs / loadFeeSlabSets */
 export async function loadIndiRouteFeeSlabs(
   db: SupabaseClient,
 ): Promise<WeightFeeSlab[]> {
-  const { data, error } = await db
-    .from("shipping_indiroute_fee_slabs")
-    .select("min_kg, max_kg, fee_inr")
-    .eq("active", true)
-    .order("min_kg", { ascending: true });
-
-  if (error || !data || data.length === 0) {
-    // Fallback to legacy packing slabs table if new table not migrated yet
-    const legacy = await loadPackingFeeSlabs(db);
-    return legacy.length > 0 ? legacy : DEFAULT_INDIROUTE_FEE_SLABS.map((s) => ({ ...s }));
-  }
-
-  return data.map((row) => ({
-    min_kg: Number(row.min_kg),
-    max_kg: row.max_kg == null ? null : Number(row.max_kg),
-    fee_inr: Number(row.fee_inr),
-  }));
+  return loadRepackingFeeSlabs(db);
 }
 
 export async function loadPackingFeeSlabs(
   db: SupabaseClient,
 ): Promise<WeightFeeSlab[]> {
-  const { data, error } = await db
-    .from("shipping_packing_fee_slabs")
-    .select("min_kg, max_kg, fee_inr")
-    .eq("active", true)
-    .order("min_kg", { ascending: true });
-
-  if (error || !data || data.length === 0) {
-    return DEFAULT_INDIROUTE_FEE_SLABS.map((slab) => ({ ...slab }));
-  }
-
-  return data.map((row) => ({
-    min_kg: Number(row.min_kg),
-    max_kg: row.max_kg == null ? null : Number(row.max_kg),
-    fee_inr: Number(row.fee_inr),
-  }));
+  return loadFeeSlabsFromTable(
+    db,
+    "shipping_packing_fee_slabs",
+    DEFAULT_REPACKING_FEE_SLABS,
+  );
 }
 
 export async function loadMarginBrackets(

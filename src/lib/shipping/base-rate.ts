@@ -69,18 +69,18 @@ export function toSelectedFromBaseRate(
   const preferred =
     candidates.find((c) => c.role === "preferred") ?? candidates[0] ?? null;
 
+  // SLA comes from existing IndiRoute service-map configuration — never from Aramex rate rows.
+  const sourceSla =
+    preferred?.sourceSla ||
+    (tier === "economy" ? "Up to 20 Business Days" : "10–15 Business Days");
+
   return {
     countryCode: row.country_code.toUpperCase(),
     countryName: row.country_name,
     customerTier: tier,
     sourceServiceId: preferred?.sourceServiceId ?? 0,
     sourceServiceName: preferred?.sourceServiceName ?? "Aramex base (admin)",
-    sourceSla:
-      row.source_sla ||
-      preferred?.sourceSla ||
-      (tier === "economy"
-        ? "Up to 20 Business Days"
-        : "10–15 Business Days"),
+    sourceSla,
     weightSlabKg: row.max_weight_kg ?? row.min_weight_kg,
     safeSourceRate: Number(row.base_aramex_rate),
     baseAramexRate: Number(row.base_aramex_rate),

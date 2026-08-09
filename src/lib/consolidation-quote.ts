@@ -32,7 +32,7 @@ export async function generateQuoteForRequest(
     },
     {
       includeAdminDetails: true,
-      indiRouteFeeOverride: input.packingFeeOverride,
+      packingFeeOverride: input.packingFeeOverride,
     },
   );
 
@@ -70,8 +70,8 @@ export async function generateQuoteForRequest(
     standard_source_rate: standard?.source?.safeSourceRate ?? null,
     packing_fee_inr:
       input.packingFeeOverride ??
-      economy?.breakdown?.indiRouteFee ??
-      standard?.breakdown?.indiRouteFee ??
+      economy?.breakdown?.packingFee ??
+      standard?.breakdown?.packingFee ??
       null,
     quote_payload: {
       public: {

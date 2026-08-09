@@ -1,11 +1,18 @@
 import { resolveBaseAramexRate } from "./base-rate";
 import { resolveCountry } from "./countries";
 import {
-  DEFAULT_INDIROUTE_FEE_SLABS,
+  DEFAULT_HANDLING_FEE_SLABS,
   DEFAULT_MARGIN_BRACKETS,
+  DEFAULT_REPACKING_FEE_SLABS,
+  DEFAULT_SERVICE_FEE_SLABS,
   DEFAULT_SHIPPING_SETTINGS,
 } from "./defaults";
-import { calculateCustomerPrice, PricingSafetyError } from "./pricing";
+import {
+  calculateCustomerPrice,
+  PricingSafetyError,
+  type FeeOverrides,
+  type FeeSlabSets,
+} from "./pricing";
 import type {
   AdminTierQuote,
   AramexBaseRateRow,
@@ -15,7 +22,6 @@ import type {
   QuoteResult,
   SelectedSourceRate,
   ShippingSettings,
-  WeightFeeSlab,
 } from "./types";
 import { calculateChargeableWeightKg } from "./weight";
 
@@ -23,9 +29,11 @@ export type QuoteBuildContext = {
   /** Admin-entered / future-API base Aramex rates */
   baseRates: AramexBaseRateRow[];
   settings?: ShippingSettings;
-  feeSlabs?: WeightFeeSlab[];
+  feeSlabs?: FeeSlabSets;
   marginBrackets?: MarginBracket[];
   enabledCountryCodes?: Set<string> | string[];
+  feeOverrides?: FeeOverrides;
+  /** @deprecated use feeOverrides.packingFeeOverride */
   indiRouteFeeOverride?: number | null;
 };
 
@@ -47,15 +55,18 @@ export class QuoteBuildError extends Error {
   }
 }
 
+const MISSING_BOTH_MESSAGE =
+  "Shipping quote temporarily unavailable for this destination.";
+
 function toCustomerOption(
   tier: "economy" | "standard" | "express",
   chargeableWeightKg: number,
   selected: SelectedSourceRate | null,
   settings: ShippingSettings,
-  feeSlabs: WeightFeeSlab[],
+  feeSlabs: FeeSlabSets,
   marginBrackets: MarginBracket[],
   includeAdmin: boolean,
-  indiRouteFeeOverride?: number | null,
+  feeOverrides?: FeeOverrides,
 ): CustomerTierQuote | AdminTierQuote {
   if (tier === "express") {
     const express: CustomerTierQuote = {
@@ -99,7 +110,7 @@ function toCustomerOption(
       settings,
       feeSlabs,
       marginBrackets,
-      indiRouteFeeOverride,
+      feeOverrides,
     );
 
     const base: CustomerTierQuote = {
@@ -130,8 +141,19 @@ export async function buildQuote(
 ): Promise<QuoteResult & { adminOptions?: AdminTierQuote[] }> {
   const includeAdmin = options?.includeAdminDetails === true;
   const settings = context.settings ?? DEFAULT_SHIPPING_SETTINGS;
-  const feeSlabs = context.feeSlabs ?? DEFAULT_INDIROUTE_FEE_SLABS;
+  const feeSlabs: FeeSlabSets = context.feeSlabs ?? {
+    handling: DEFAULT_HANDLING_FEE_SLABS,
+    service: DEFAULT_SERVICE_FEE_SLABS,
+    repacking: DEFAULT_REPACKING_FEE_SLABS,
+  };
   const marginBrackets = context.marginBrackets ?? DEFAULT_MARGIN_BRACKETS;
+  const feeOverrides: FeeOverrides = {
+    ...context.feeOverrides,
+    packingFeeOverride:
+      context.feeOverrides?.packingFeeOverride ??
+      context.indiRouteFeeOverride ??
+      null,
+  };
 
   const country = resolveCountry(input.countryCode);
   if (!country) {
@@ -176,13 +198,6 @@ export async function buildQuote(
     (row) => row.country_code.toUpperCase() === country.code && row.active,
   );
 
-  if (countryRates.length === 0 && settings.base_rate_source === "admin_table") {
-    throw new QuoteBuildError(
-      "missing_rates",
-      "No Aramex base rates are configured for this destination yet.",
-    );
-  }
-
   const lookupBase = {
     countryCode: country.code,
     countryName: country.name,
@@ -210,10 +225,7 @@ export async function buildQuote(
     : null;
 
   if (!economySelected && !standardSelected) {
-    throw new QuoteBuildError(
-      "missing_rates",
-      "No Aramex base rate matches this chargeable weight for Economy or Standard.",
-    );
+    throw new QuoteBuildError("missing_rates", MISSING_BOTH_MESSAGE);
   }
 
   const economy = toCustomerOption(
@@ -224,7 +236,7 @@ export async function buildQuote(
     feeSlabs,
     marginBrackets,
     includeAdmin,
-    context.indiRouteFeeOverride,
+    feeOverrides,
   );
   const standard = toCustomerOption(
     "standard",
@@ -234,7 +246,7 @@ export async function buildQuote(
     feeSlabs,
     marginBrackets,
     includeAdmin,
-    context.indiRouteFeeOverride,
+    feeOverrides,
   );
   const express = toCustomerOption(
     "express",
@@ -256,6 +268,12 @@ export async function buildQuote(
   const weightSlabKg =
     standardSelected?.weightSlabKg ?? economySelected?.weightSlabKg ?? null;
 
+  // Hide unavailable Economy/Standard from customer options; always keep Express.
+  const customerOptions: CustomerTierQuote[] = [];
+  if (economy.available) customerOptions.push(economy);
+  if (standard.available) customerOptions.push(standard);
+  customerOptions.push(express);
+
   const result: QuoteResult & { adminOptions?: AdminTierQuote[] } = {
     origin: "India",
     countryCode: country.code,
@@ -267,7 +285,9 @@ export async function buildQuote(
     volumetricWeightKg: Number(weights.volumetricWeightKg.toFixed(3)),
     chargeableWeightKg: Number(weights.chargeableWeightKg.toFixed(3)),
     weightSlabKg,
-    options: [economy, standard, express],
+    options: includeAdmin
+      ? [economy, standard, express]
+      : customerOptions,
   };
 
   if (includeAdmin) {
@@ -282,6 +302,25 @@ export async function buildQuote(
 }
 
 export function toPublicQuote(result: QuoteResult): QuoteResult {
+  const options = result.options
+    .filter(
+      (option) =>
+        option.tier === "express" ||
+        option.comingSoon ||
+        option.available,
+    )
+    .map((option) => ({
+      tier: option.tier,
+      displayName: option.displayName,
+      available: option.available,
+      comingSoon: option.comingSoon,
+      badge: option.badge,
+      priceInr: option.priceInr,
+      estimatedDelivery: option.estimatedDelivery,
+      chargeableWeightKg: option.chargeableWeightKg,
+      currency: option.currency,
+    }));
+
   return {
     origin: result.origin,
     countryCode: result.countryCode,
@@ -293,16 +332,6 @@ export function toPublicQuote(result: QuoteResult): QuoteResult {
     volumetricWeightKg: result.volumetricWeightKg,
     chargeableWeightKg: result.chargeableWeightKg,
     weightSlabKg: result.weightSlabKg,
-    options: result.options.map((option) => ({
-      tier: option.tier,
-      displayName: option.displayName,
-      available: option.available,
-      comingSoon: option.comingSoon,
-      badge: option.badge,
-      priceInr: option.priceInr,
-      estimatedDelivery: option.estimatedDelivery,
-      chargeableWeightKg: option.chargeableWeightKg,
-      currency: option.currency,
-    })),
+    options,
   };
 }

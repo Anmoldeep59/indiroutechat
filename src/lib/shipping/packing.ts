@@ -1,16 +1,21 @@
-import { DEFAULT_INDIROUTE_FEE_SLABS } from "./defaults";
+import {
+  DEFAULT_HANDLING_FEE_SLABS,
+  DEFAULT_REPACKING_FEE_SLABS,
+  DEFAULT_SERVICE_FEE_SLABS,
+} from "./defaults";
 import type { WeightFeeSlab } from "./types";
 
 /**
  * Weight slabs use exclusive lower bounds after the first slab:
  * 0–0.50, >0.50–1, >1–2, etc.
  */
-export function getIndiRouteFee(
+export function getFeeFromSlabs(
   chargeableWeightKg: number,
-  slabs: WeightFeeSlab[] = DEFAULT_INDIROUTE_FEE_SLABS,
+  slabs: WeightFeeSlab[],
+  label = "fee",
 ): number {
   if (!Number.isFinite(chargeableWeightKg) || chargeableWeightKg < 0) {
-    throw new Error("Invalid chargeable weight for IndiRoute fee.");
+    throw new Error(`Invalid chargeable weight for ${label}.`);
   }
 
   const ordered = [...slabs].sort((a, b) => a.min_kg - b.min_kg);
@@ -32,10 +37,39 @@ export function getIndiRouteFee(
   return ordered[ordered.length - 1]?.fee_inr ?? 0;
 }
 
-/** @deprecated Use getIndiRouteFee */
+export function getHandlingFee(
+  chargeableWeightKg: number,
+  slabs: WeightFeeSlab[] = DEFAULT_HANDLING_FEE_SLABS,
+): number {
+  return getFeeFromSlabs(chargeableWeightKg, slabs, "handling fee");
+}
+
+export function getServiceFee(
+  chargeableWeightKg: number,
+  slabs: WeightFeeSlab[] = DEFAULT_SERVICE_FEE_SLABS,
+): number {
+  return getFeeFromSlabs(chargeableWeightKg, slabs, "service fee");
+}
+
+export function getRepackingFee(
+  chargeableWeightKg: number,
+  slabs: WeightFeeSlab[] = DEFAULT_REPACKING_FEE_SLABS,
+): number {
+  return getFeeFromSlabs(chargeableWeightKg, slabs, "repacking fee");
+}
+
+/** @deprecated Use getRepackingFee */
 export function getPackingFee(
   chargeableWeightKg: number,
-  slabs: WeightFeeSlab[] = DEFAULT_INDIROUTE_FEE_SLABS,
+  slabs: WeightFeeSlab[] = DEFAULT_REPACKING_FEE_SLABS,
 ): number {
-  return getIndiRouteFee(chargeableWeightKg, slabs);
+  return getRepackingFee(chargeableWeightKg, slabs);
+}
+
+/** @deprecated Use separate fee helpers */
+export function getIndiRouteFee(
+  chargeableWeightKg: number,
+  slabs: WeightFeeSlab[] = DEFAULT_REPACKING_FEE_SLABS,
+): number {
+  return getRepackingFee(chargeableWeightKg, slabs);
 }

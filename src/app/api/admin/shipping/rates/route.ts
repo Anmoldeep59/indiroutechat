@@ -3,7 +3,7 @@ import { requireAdminUser } from "@/lib/auth-server";
 import { getCountryName, resolveCountry } from "@/lib/shipping/countries";
 import { calculateCustomerPrice } from "@/lib/shipping/pricing";
 import {
-  loadIndiRouteFeeSlabs,
+  loadFeeSlabSets,
   loadMarginBrackets,
   loadShippingSettings,
 } from "@/lib/shipping/settings";
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   }
 
   const settings = await loadShippingSettings(auth.db);
-  const feeSlabs = await loadIndiRouteFeeSlabs(auth.db);
+  const feeSlabs = await loadFeeSlabSets(auth.db);
   const marginBrackets = await loadMarginBrackets(auth.db);
 
   const rates = (data ?? []).map((row) => {
@@ -79,14 +79,12 @@ export async function GET(request: Request) {
       maxWeightKg: row.max_weight_kg,
       sourceRate: base,
       baseAramexRate: base,
-      fuelCharge: priced?.fuelCharge ?? null,
-      aramexLandedCost: priced?.aramexLandedCost ?? null,
-      shippingCharge: priced?.shippingSellingPrice ?? null,
-      handlingFee: 0,
-      serviceFee: 0,
-      packingFee: priced?.indiRouteFee ?? null,
-      indiRouteFee: priced?.indiRouteFee ?? null,
-      gst: 0,
+      fuelCharge: priced?.aramexFuelSurcharge ?? null,
+      aramexTransportCost: priced?.aramexTransportCost ?? null,
+      shippingCharge: priced?.indiRouteTransportPrice ?? null,
+      handlingFee: priced?.handlingFee ?? null,
+      serviceFee: priced?.serviceFee ?? null,
+      packingFee: priced?.packingFee ?? null,
       finalCustomerPrice: priced?.finalPrice ?? null,
       blockedIndiaPost: false,
       active: row.active,
