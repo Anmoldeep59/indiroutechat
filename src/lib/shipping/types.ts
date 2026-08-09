@@ -67,6 +67,7 @@ export type ShippingSettings = {
   express_enabled: boolean;
   final_price_round_to_inr: number;
   currency: string;
+  quote_validity_hours: number;
 };
 
 export type QuoteRequestInput = {

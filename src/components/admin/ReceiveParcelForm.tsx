@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuthState } from "@/hooks/useAuthState";
 
 type CustomerOption = {
@@ -8,8 +9,10 @@ type CustomerOption = {
   firstName: string | null;
   lastName: string | null;
   email: string | null;
+  phone?: string | null;
   lockerId: string | null;
   lockerCode: string | null;
+  parcelCount?: number;
 };
 
 const fieldClassName =
@@ -27,6 +30,7 @@ function customerLabel(customer: CustomerOption) {
 
 export function ReceiveParcelForm() {
   const { user } = useAuthState();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CustomerOption[]>([]);
   const [selected, setSelected] = useState<CustomerOption | null>(null);
@@ -34,6 +38,23 @@ export function ReceiveParcelForm() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    const profileId = searchParams.get("profileId");
+    if (!profileId) return;
+    const name = searchParams.get("name") || "";
+    const [firstName, ...rest] = name.split(" ");
+    queueMicrotask(() => {
+      setSelected({
+        profileId,
+        firstName: firstName || null,
+        lastName: rest.join(" ") || null,
+        email: searchParams.get("email"),
+        lockerId: searchParams.get("lockerId"),
+        lockerCode: searchParams.get("lockerCode"),
+      });
+    });
+  }, [searchParams]);
 
   useEffect(() => {
     if (!user || selected) return;
@@ -49,9 +70,7 @@ export function ReceiveParcelForm() {
         const idToken = await user.getIdToken();
         const response = await fetch(
           `/api/admin/customers/search?q=${encodeURIComponent(query.trim())}`,
-          {
-            headers: { Authorization: `Bearer ${idToken}` },
-          },
+          { headers: { Authorization: `Bearer ${idToken}` } },
         );
         const payload = (await response.json().catch(() => null)) as {
           customers?: CustomerOption[];
@@ -76,7 +95,7 @@ export function ReceiveParcelForm() {
       } finally {
         if (!cancelled) setSearching(false);
       }
-    }, 300);
+    }, 250);
 
     return () => {
       cancelled = true;
@@ -90,6 +109,7 @@ export function ReceiveParcelForm() {
       name: customerLabel(selected),
       email: selected.email,
       locker: selected.lockerCode,
+      parcels: selected.parcelCount,
     };
   }, [selected]);
 
@@ -121,17 +141,20 @@ export function ReceiveParcelForm() {
           carrier: String(formData.get("carrier") ?? ""),
           trackingNumber: String(formData.get("trackingNumber") ?? ""),
           senderName: String(formData.get("senderName") ?? ""),
+          description: String(formData.get("description") ?? ""),
           weightKg: formData.get("weightKg"),
           lengthCm: formData.get("lengthCm"),
           widthCm: formData.get("widthCm"),
           heightCm: formData.get("heightCm"),
+          receivedAt: String(formData.get("receivedAt") ?? "") || null,
           notes: String(formData.get("notes") ?? ""),
+          photoUrl: String(formData.get("photoUrl") ?? "") || null,
         }),
       });
 
       const payload = (await response.json().catch(() => null)) as {
         error?: string;
-        parcel?: { id: string };
+        parcel?: { id: string; reference_code?: string };
       } | null;
 
       if (!response.ok) {
@@ -140,18 +163,17 @@ export function ReceiveParcelForm() {
       }
 
       setSuccess(
-        `Parcel received successfully${payload?.parcel?.id ? ` (${payload.parcel.id.slice(0, 8)}…)` : ""}.`,
+        `Parcel ${payload?.parcel?.reference_code ?? "received"} saved for ${customerLabel(selected)}.`,
       );
       event.currentTarget.reset();
-      setSelected(null);
-      setQuery("");
-      setResults([]);
     } catch {
       setFormError("Unable to create parcel.");
     } finally {
       setSubmitting(false);
     }
   }
+
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <form
@@ -160,42 +182,41 @@ export function ReceiveParcelForm() {
     >
       <div>
         <h2 className="font-display text-xl font-semibold tracking-tight text-brand">
-          Receive Parcel
+          Add Package
         </h2>
         <p className="mt-2 text-sm text-brand-muted">
-          Create a warehouse-received parcel for a customer locker.
+          Create a separate warehouse-received parcel for this locker.
         </p>
       </div>
 
       {formError ? (
-        <p
-          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-          role="alert"
-        >
+        <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
           {formError}
         </p>
       ) : null}
 
       {success ? (
-        <p
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-          role="status"
-        >
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
           {success}
         </p>
       ) : null}
 
       <div>
         <label htmlFor="customer-search" className={labelClassName}>
-          Customer
+          Customer / Locker
         </label>
         {selected ? (
           <div className="mt-1.5 rounded-md border border-border bg-background px-4 py-3">
             <p className="font-semibold text-brand">{selectedSummary?.name}</p>
             <p className="text-sm text-brand-muted">{selectedSummary?.email}</p>
-            <p className="mt-1 text-sm text-brand">
+            <p className="mt-1 text-sm font-semibold text-accent">
               Locker: {selectedSummary?.locker || "No locker assigned"}
             </p>
+            {selectedSummary?.parcels != null ? (
+              <p className="text-sm text-brand-muted">
+                Current parcels: {selectedSummary.parcels}
+              </p>
+            ) : null}
             <button
               type="button"
               className="mt-3 text-sm font-semibold text-accent hover:text-accent-hover"
@@ -213,7 +234,7 @@ export function ReceiveParcelForm() {
               id="customer-search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by name, email, or locker code"
+              placeholder="Search locker ID, name, email, or phone"
               className={fieldClassName}
               disabled={submitting}
             />
@@ -237,8 +258,10 @@ export function ReceiveParcelForm() {
                         {customerLabel(customer)}
                       </span>
                       <span className="text-xs text-brand-muted">
-                        {customer.email || "No email"} · Locker{" "}
-                        {customer.lockerCode || "N/A"}
+                        {customer.lockerCode || "N/A"} · {customer.email || "No email"}
+                        {customer.parcelCount != null
+                          ? ` · ${customer.parcelCount} parcels`
+                          : ""}
                       </span>
                     </button>
                   </li>
@@ -250,17 +273,23 @@ export function ReceiveParcelForm() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor="carrier" className={labelClassName}>
-            Courier Name
+        <div className="sm:col-span-2">
+          <label htmlFor="description" className={labelClassName}>
+            Package Description
           </label>
           <input
-            id="carrier"
-            name="carrier"
+            id="description"
+            name="description"
             className={fieldClassName}
-            placeholder="e.g. Delhivery"
+            placeholder="e.g. Glasses, Kurta, Amazon parcel"
             disabled={submitting}
           />
+        </div>
+        <div>
+          <label htmlFor="carrier" className={labelClassName}>
+            Courier
+          </label>
+          <input id="carrier" name="carrier" className={fieldClassName} disabled={submitting} />
         </div>
         <div>
           <label htmlFor="trackingNumber" className={labelClassName}>
@@ -275,7 +304,7 @@ export function ReceiveParcelForm() {
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="senderName" className={labelClassName}>
-            Sender / Store Name
+            Store / Sender
           </label>
           <input
             id="senderName"
@@ -287,7 +316,7 @@ export function ReceiveParcelForm() {
         </div>
         <div>
           <label htmlFor="weightKg" className={labelClassName}>
-            Weight (kg)
+            Actual Weight (kg)
           </label>
           <input
             id="weightKg"
@@ -300,50 +329,45 @@ export function ReceiveParcelForm() {
           />
         </div>
         <div>
-          <label htmlFor="lengthCm" className={labelClassName}>
-            Length (cm)
+          <label htmlFor="receivedAt" className={labelClassName}>
+            Received Date
           </label>
           <input
-            id="lengthCm"
-            name="lengthCm"
-            type="number"
-            min="0"
-            step="0.1"
+            id="receivedAt"
+            name="receivedAt"
+            type="date"
+            defaultValue={today}
             className={fieldClassName}
             disabled={submitting}
           />
+        </div>
+        <div>
+          <label htmlFor="lengthCm" className={labelClassName}>
+            Length (cm)
+          </label>
+          <input id="lengthCm" name="lengthCm" type="number" min="0" step="0.1" className={fieldClassName} disabled={submitting} />
         </div>
         <div>
           <label htmlFor="widthCm" className={labelClassName}>
             Width (cm)
           </label>
-          <input
-            id="widthCm"
-            name="widthCm"
-            type="number"
-            min="0"
-            step="0.1"
-            className={fieldClassName}
-            disabled={submitting}
-          />
+          <input id="widthCm" name="widthCm" type="number" min="0" step="0.1" className={fieldClassName} disabled={submitting} />
         </div>
         <div>
           <label htmlFor="heightCm" className={labelClassName}>
             Height (cm)
           </label>
-          <input
-            id="heightCm"
-            name="heightCm"
-            type="number"
-            min="0"
-            step="0.1"
-            className={fieldClassName}
-            disabled={submitting}
-          />
+          <input id="heightCm" name="heightCm" type="number" min="0" step="0.1" className={fieldClassName} disabled={submitting} />
+        </div>
+        <div>
+          <label htmlFor="photoUrl" className={labelClassName}>
+            Photo URL (optional)
+          </label>
+          <input id="photoUrl" name="photoUrl" className={fieldClassName} disabled={submitting} />
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="notes" className={labelClassName}>
-            Short Notes
+            Notes
           </label>
           <textarea
             id="notes"
@@ -360,7 +384,7 @@ export function ReceiveParcelForm() {
         disabled={submitting || !selected}
         className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {submitting ? "Saving parcel..." : "Receive Parcel"}
+        {submitting ? "Saving parcel..." : "Save Package"}
       </button>
     </form>
   );

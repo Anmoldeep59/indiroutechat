@@ -23,6 +23,7 @@ type SettingsRow = {
   express_enabled: boolean;
   final_price_round_to_inr: number;
   currency: string;
+  quote_validity_hours?: number;
 };
 
 export async function loadShippingSettings(
@@ -31,7 +32,7 @@ export async function loadShippingSettings(
   const { data, error } = await db
     .from("shipping_settings")
     .select(
-      "shipping_markup_percent, handling_fee_inr, service_fee_inr, gst_rate, volumetric_divisor, tax_mode, economy_enabled, standard_enabled, express_enabled, final_price_round_to_inr, currency",
+      "shipping_markup_percent, handling_fee_inr, service_fee_inr, gst_rate, volumetric_divisor, tax_mode, economy_enabled, standard_enabled, express_enabled, final_price_round_to_inr, currency, quote_validity_hours",
     )
     .eq("id", 1)
     .maybeSingle();
@@ -53,6 +54,9 @@ export async function loadShippingSettings(
     express_enabled: Boolean(row.express_enabled),
     final_price_round_to_inr: Number(row.final_price_round_to_inr),
     currency: row.currency || "INR",
+    quote_validity_hours: Number(
+      row.quote_validity_hours ?? DEFAULT_SHIPPING_SETTINGS.quote_validity_hours,
+    ),
   };
 }
 

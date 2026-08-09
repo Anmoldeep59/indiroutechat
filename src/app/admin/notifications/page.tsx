@@ -1,10 +1,5 @@
-﻿import AdminPlaceholder from "@/components/admin/AdminPlaceholder";
+﻿import { NotificationsInbox } from "@/components/NotificationsInbox";
 
 export default function Page() {
-  return (
-    <AdminPlaceholder
-      title="Notifications"
-      description="Send and review customer notifications."
-    />
-  );
+  return <NotificationsInbox />;
 }

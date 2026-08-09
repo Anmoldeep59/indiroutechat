@@ -1,10 +1,5 @@
-import { PlaceholderSection } from "@/components/dashboard/PlaceholderSection";
+import { NotificationsInbox } from "@/components/NotificationsInbox";
 
-export default function NotificationsPage() {
-  return (
-    <PlaceholderSection
-      title="Notifications"
-      description="Parcel, shipment, and account notifications will appear here."
-    />
-  );
+export default function Page() {
+  return <NotificationsInbox />;
 }

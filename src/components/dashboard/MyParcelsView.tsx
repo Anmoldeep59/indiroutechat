@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthState } from "@/hooks/useAuthState";
 import {
   getParcelStatusLabel,
+  isParcelSelectable,
   type CustomerParcel,
 } from "@/lib/parcel-status";
 
@@ -11,114 +13,33 @@ function formatDate(value: string | null) {
   if (!value) return "—";
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
-    timeStyle: "short",
   }).format(new Date(value));
 }
 
-/** Visual-only styling per status; labels/logic stay in parcel-status. */
 const STATUS_BADGE_CLASSES: Record<string, string> = {
-  in_process: "bg-brand/[0.06] text-brand",
   warehouse_received: "bg-brand/[0.08] text-brand",
   inspection: "bg-brand/[0.08] text-brand",
   ready_for_consolidation: "bg-accent/10 text-accent-hover",
-  packed: "bg-accent/10 text-accent-hover",
-  payment_pending: "bg-accent/15 text-accent-hover",
-  ready_to_ship: "bg-accent/15 text-accent-hover",
+  consolidated: "bg-brand/[0.08] text-brand",
+  assigned_to_shipment: "bg-success/10 text-success",
   shipped: "bg-brand/[0.08] text-brand",
-  in_transit: "bg-brand/[0.08] text-brand",
   delivered: "bg-success/10 text-success",
 };
 
-const journeySteps = [
-  {
-    label: "Received",
-    icon: (
-      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 8.25L12 3l7.5 5.25v12H4.5v-12z" />
-      </svg>
-    ),
-  },
-  {
-    label: "Inspection",
-    icon: (
-      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.2-5.2M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
-      </svg>
-    ),
-  },
-  {
-    label: "Packed",
-    icon: (
-      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-      </svg>
-    ),
-  },
-  {
-    label: "Ready to Ship",
-    icon: (
-      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375A1.125 1.125 0 012.25 17.625V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0H21M3.375 14.25h17.25M3.375 14.25V6.375c0-.621.504-1.125 1.125-1.125h6.75c.621 0 1.125.504 1.125 1.125v7.875" />
-      </svg>
-    ),
-  },
-  {
-    label: "In Transit",
-    icon: (
-      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-      </svg>
-    ),
-  },
-  {
-    label: "Delivered",
-    icon: (
-      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-      </svg>
-    ),
-  },
-] as const;
-
-function ParcelJourneyLegend() {
-  return (
-    <div
-      className="overflow-x-auto rounded-2xl border border-border bg-surface px-5 py-4 shadow-[0_1px_3px_rgba(12,35,64,0.05)]"
-      aria-hidden="true"
-    >
-      <div className="flex min-w-[36rem] items-center">
-        {journeySteps.map((step, index) => (
-          <div key={step.label} className="flex flex-1 items-center">
-            <div className="flex shrink-0 items-center gap-2">
-              <span
-                className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                  index === journeySteps.length - 1
-                    ? "bg-success/10 text-success"
-                    : "bg-brand/[0.06] text-brand"
-                }`}
-              >
-                {step.icon}
-              </span>
-              <span className="text-xs font-semibold text-brand-muted">
-                {step.label}
-              </span>
-            </div>
-            {index < journeySteps.length - 1 ? (
-              <span className="mx-3 h-px flex-1 border-t border-dashed border-border" />
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function MyParcelsView() {
+  const router = useRouter();
   const { user, loading: authLoading } = useAuthState();
   const [parcels, setParcels] = useState<CustomerParcel[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  const selectable = useMemo(
+    () => parcels.filter((p) => isParcelSelectable(p.status)),
+    [parcels],
+  );
 
   const refresh = useCallback(() => {
     setReloadKey((value) => value + 1);
@@ -126,18 +47,15 @@ export function MyParcelsView() {
 
   useEffect(() => {
     if (authLoading) return;
-
     if (!user) {
       queueMicrotask(() => {
         setParcels([]);
         setLoading(false);
-        setError(null);
       });
       return;
     }
 
     let cancelled = false;
-
     queueMicrotask(() => {
       if (!cancelled) {
         setLoading(true);
@@ -155,21 +73,15 @@ export function MyParcelsView() {
           parcels?: CustomerParcel[];
           error?: string;
         } | null;
-
         if (cancelled) return;
-
         if (!response.ok) {
-          setParcels([]);
           setError(payload?.error || "Unable to load your parcels.");
+          setParcels([]);
           return;
         }
-
         setParcels(payload?.parcels ?? []);
       } catch {
-        if (!cancelled) {
-          setParcels([]);
-          setError("Unable to load your parcels.");
-        }
+        if (!cancelled) setError("Unable to load your parcels.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -181,43 +93,104 @@ export function MyParcelsView() {
     };
   }, [authLoading, user, reloadKey]);
 
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelected(new Set(selectable.map((p) => p.id)));
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  async function requestQuote() {
+    if (!user || selected.size < 1 || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch("/api/consolidation/requests", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ parcelIds: [...selected] }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        request?: { id: string };
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.request?.id) {
+        setError(payload?.error || "Unable to create quote request.");
+        return;
+      }
+      router.push(`/dashboard/consolidation/${payload.request.id}`);
+    } catch {
+      setError("Unable to create quote request.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const selectedCount = selected.size;
+  const ctaLabel =
+    selectedCount <= 1 ? "Get Shipping Quote" : "Combine & Get Quote";
+
   return (
-    <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6 shadow-[0_1px_3px_rgba(12,35,64,0.05)] sm:p-8">
-        <div
-          className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-accent/[0.06] blur-2xl"
-          aria-hidden="true"
-        />
+    <div className="space-y-6 pb-28">
+      <section className="rounded-2xl border border-border bg-surface p-6 sm:p-8">
         <p className="font-display text-xs font-semibold uppercase tracking-[0.14em] text-accent">
           My Parcels
         </p>
         <h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-brand sm:text-3xl">
           Parcels in your locker
         </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-brand-muted sm:text-base">
-          Packages received at the IndiRoute warehouse for your account.
+        <p className="mt-3 max-w-2xl text-sm text-brand-muted sm:text-base">
+          Select one or more parcels, then request a shipping quote. Combining
+          parcels means warehouse staff will pack them before pricing.
         </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={selectAll}
+            disabled={selectable.length === 0}
+            className="min-h-10 rounded-md border border-border px-4 text-sm font-semibold text-brand disabled:opacity-50"
+          >
+            Select All
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            disabled={selectedCount === 0}
+            className="min-h-10 rounded-md border border-border px-4 text-sm font-semibold text-brand disabled:opacity-50"
+          >
+            Clear Selection
+          </button>
+          <span className="inline-flex min-h-10 items-center text-sm font-semibold text-brand">
+            {selectedCount} parcel{selectedCount === 1 ? "" : "s"} selected
+          </span>
+        </div>
       </section>
 
-      <ParcelJourneyLegend />
-
       {loading || authLoading ? (
-        <div className="rounded-xl border border-border bg-surface p-8 text-center">
-          <div
-            className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-brand/20 border-t-accent"
-            aria-hidden="true"
-          />
-          <p className="mt-4 text-sm font-semibold text-brand">
-            Loading your parcels...
-          </p>
-        </div>
+        <p className="rounded-xl border border-border bg-surface p-8 text-center text-sm text-brand-muted">
+          Loading your parcels...
+        </p>
       ) : error ? (
         <div className="rounded-xl border border-border bg-surface p-6">
-          <p className="text-sm text-brand-muted">{error}</p>
+          <p className="text-sm text-red-700">{error}</p>
           <button
             type="button"
             onClick={refresh}
-            className="mt-4 text-sm font-semibold text-accent hover:text-accent-hover"
+            className="mt-3 text-sm font-semibold text-accent"
           >
             Try again
           </button>
@@ -227,69 +200,95 @@ export function MyParcelsView() {
           <p className="text-sm font-medium text-brand">
             No parcels have been received yet.
           </p>
-          <p className="mt-2 text-sm text-brand-muted">
-            When a package arrives at the warehouse, it will appear here.
-          </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-border bg-surface shadow-[0_4px_20px_rgba(12,35,64,0.06)]">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-border bg-background/80">
-              <tr>
-                <th className="px-4 py-3 font-semibold text-brand">Reference</th>
-                <th className="px-4 py-3 font-semibold text-brand">Courier</th>
-                <th className="px-4 py-3 font-semibold text-brand">Tracking</th>
-                <th className="px-4 py-3 font-semibold text-brand">Sender</th>
-                <th className="px-4 py-3 font-semibold text-brand">Weight</th>
-                <th className="px-4 py-3 font-semibold text-brand">Received</th>
-                <th className="px-4 py-3 font-semibold text-brand">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {parcels.map((parcel) => (
-                <tr key={parcel.id} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-3 font-mono text-xs text-brand">
-                    {parcel.id.slice(0, 8)}…
-                  </td>
-                  <td className="px-4 py-3 text-brand-muted">
-                    {parcel.carrier || "—"}
-                  </td>
-                  <td className="px-4 py-3 text-brand-muted">
-                    {parcel.inbound_tracking_number || "—"}
-                  </td>
-                  <td className="px-4 py-3 text-brand-muted">
-                    {parcel.sender_name || "—"}
-                  </td>
-                  <td className="px-4 py-3 text-brand-muted">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {parcels.map((parcel) => {
+            const canSelect = isParcelSelectable(parcel.status);
+            const isSelected = selected.has(parcel.id);
+            return (
+              <article
+                key={parcel.id}
+                className={[
+                  "relative rounded-xl border bg-surface p-5 transition-colors",
+                  isSelected
+                    ? "border-brand bg-brand/[0.03] shadow-[0_0_0_1px_var(--brand)]"
+                    : "border-border",
+                  canSelect ? "cursor-pointer" : "opacity-70",
+                ].join(" ")}
+                onClick={() => {
+                  if (canSelect) toggle(parcel.id);
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand/[0.06] text-brand">
+                    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.75">
+                      <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </div>
+                  {canSelect ? (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggle(parcel.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1 h-5 w-5 accent-[var(--brand)]"
+                      aria-label={`Select ${parcel.reference_code}`}
+                    />
+                  ) : null}
+                </div>
+                {isSelected ? (
+                  <span className="absolute right-4 top-4 text-accent" aria-hidden="true">
+                    ✓
+                  </span>
+                ) : null}
+                <h2 className="mt-4 font-display text-lg font-bold text-brand">
+                  {parcel.reference_code || parcel.id.slice(0, 8)}
+                </h2>
+                <p className="mt-1 text-sm font-medium text-brand">
+                  {parcel.description || "Parcel"}
+                </p>
+                <dl className="mt-3 space-y-1 text-sm text-brand-muted">
+                  <div>Store/Sender: {parcel.sender_name || "—"}</div>
+                  <div>Courier: {parcel.carrier || "—"}</div>
+                  <div>Tracking: {parcel.inbound_tracking_number || "—"}</div>
+                  <div>
+                    Weight:{" "}
                     {parcel.weight_kg != null ? `${parcel.weight_kg} kg` : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-brand-muted">
-                    {formatDate(parcel.received_at)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold ${
-                        STATUS_BADGE_CLASSES[parcel.status] ??
-                        "bg-brand/[0.06] text-brand"
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-1.5 w-1.5 rounded-full ${
-                          parcel.status === "delivered"
-                            ? "bg-success"
-                            : "bg-current opacity-60"
-                        }`}
-                        aria-hidden="true"
-                      />
-                      {getParcelStatusLabel(parcel.status)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                  <div>Received: {formatDate(parcel.received_at)}</div>
+                </dl>
+                <span
+                  className={`mt-4 inline-flex rounded-md px-2 py-1 text-xs font-semibold ${
+                    STATUS_BADGE_CLASSES[parcel.status] ??
+                    "bg-brand/[0.06] text-brand"
+                  }`}
+                >
+                  {getParcelStatusLabel(parcel.status)}
+                </span>
+              </article>
+            );
+          })}
         </div>
       )}
+
+      {selectedCount > 0 ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 px-4 py-3 shadow-[0_-8px_30px_rgba(12,35,64,0.12)] backdrop-blur">
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-semibold text-brand">
+              Selected parcels: {selectedCount}
+            </p>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => void requestQuote()}
+              className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-6 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+            >
+              {submitting ? "Submitting…" : ctaLabel}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

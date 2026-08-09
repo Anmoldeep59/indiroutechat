@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { BarcodeDecor } from "@/components/illustrations";
 import type { CustomerLockerView } from "@/lib/locker-display";
-import { formatCustomerLockerAddress } from "@/lib/locker-display";
+import {
+  formatCustomerLockerAddress,
+  formatLockerRecipientName,
+} from "@/lib/locker-display";
 
 type LockerAddressCardProps = {
   locker: CustomerLockerView;
@@ -29,6 +32,7 @@ export function LockerAddressCard({
   const cityLine = [locker.city, locker.state, locker.postcode]
     .filter(Boolean)
     .join(", ");
+  const recipient = formatLockerRecipientName(locker);
 
   return (
     <div
@@ -56,8 +60,7 @@ export function LockerAddressCard({
       </div>
 
       <div className="mt-4 space-y-1 text-sm leading-relaxed text-brand">
-        <p className="font-semibold">{locker.customerName}</p>
-        <p>Locker: {locker.lockerCode}</p>
+        <p className="text-base font-bold tracking-tight">{recipient}</p>
         <p>{locker.warehouseName}</p>
         {locker.line1 ? <p>{locker.line1}</p> : null}
         {locker.line2 ? <p>{locker.line2}</p> : null}
@@ -74,14 +77,14 @@ export function LockerAddressCard({
           }
           className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent px-4 text-sm font-semibold text-white shadow-[0_2px_8px_rgba(232,106,23,0.25)] transition-all duration-200 hover:bg-accent-hover hover:shadow-[0_6px_16px_rgba(232,106,23,0.32)] motion-safe:hover:-translate-y-0.5 active:scale-[0.98]"
         >
-          {copied === "address" ? "Address copied" : "Copy Address"}
+          {copied === "address" ? "Address copied" : "Copy Full Address"}
         </button>
         <button
           type="button"
           onClick={() => void copyText(locker.lockerCode, "code")}
           className="inline-flex min-h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold text-brand transition-all duration-200 hover:border-brand/30 hover:shadow-sm motion-safe:hover:-translate-y-0.5 active:scale-[0.98]"
         >
-          {copied === "code" ? "Code copied" : "Copy Locker Code"}
+          {copied === "code" ? "Locker ID copied" : "Copy Locker ID"}
         </button>
       </div>
     </div>

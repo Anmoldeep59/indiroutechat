@@ -1,10 +1,5 @@
-﻿import AdminPlaceholder from "@/components/admin/AdminPlaceholder";
+﻿import { AdminConsolidationView } from "@/components/admin/AdminConsolidationView";
 
 export default function Page() {
-  return (
-    <AdminPlaceholder
-      title="Consolidation"
-      description="Review consolidation and secure repack requests."
-    />
-  );
+  return <AdminConsolidationView />;
 }

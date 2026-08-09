@@ -1,10 +1,5 @@
-import { PlaceholderSection } from "@/components/dashboard/PlaceholderSection";
+import { ConsolidationRequestsList } from "@/components/dashboard/ConsolidationRequestsList";
 
-export default function ConsolidationPage() {
-  return (
-    <PlaceholderSection
-      title="Consolidation"
-      description="Request combining multiple parcels into one international shipment. Secure repacking options will be available here."
-    />
-  );
+export default function Page() {
+  return <ConsolidationRequestsList />;
 }

@@ -12,6 +12,7 @@ export const DEFAULT_SHIPPING_SETTINGS: ShippingSettings = {
   express_enabled: false,
   final_price_round_to_inr: 10,
   currency: "INR",
+  quote_validity_hours: 24,
 };
 
 export const DEFAULT_PACKING_FEE_SLABS: PackingFeeSlab[] = [

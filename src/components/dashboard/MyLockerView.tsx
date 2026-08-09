@@ -56,8 +56,8 @@ export function MyLockerView() {
           Your India warehouse address
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-brand-muted sm:text-base">
-          Use this address when shopping from Indian websites. Always include
-          your locker code so we can match parcels to your account.
+          When shopping on Amazon India or another Indian store, include your
+          IndiRoute locker ID with your name exactly as shown above.
         </p>
       </section>
 
@@ -88,8 +88,11 @@ export function MyLockerView() {
                 Paste it as the shipping address on Indian store checkouts.
               </li>
               <li>
-                Make sure your locker code ({locker.lockerCode}) appears in the
-                address or recipient name field.
+                Keep the recipient name exactly as{" "}
+                <span className="font-semibold text-brand">
+                  {locker.customerName} - {locker.lockerCode}
+                </span>
+                .
               </li>
               <li>
                 After your parcel arrives at IndiRoute, it will show up under My

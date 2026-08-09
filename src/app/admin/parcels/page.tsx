@@ -1,4 +1,5 @@
-﻿import { ReceiveParcelForm } from "@/components/admin/ReceiveParcelForm";
+﻿import { Suspense } from "react";
+import { ReceiveParcelForm } from "@/components/admin/ReceiveParcelForm";
 
 export default function AdminParcelsPage() {
   return (
@@ -16,7 +17,9 @@ export default function AdminParcelsPage() {
         </p>
       </section>
 
-      <ReceiveParcelForm />
+      <Suspense fallback={<p className="text-sm text-brand-muted">Loading form…</p>}>
+        <ReceiveParcelForm />
+      </Suspense>
     </div>
   );
 }

@@ -1,10 +1,5 @@
-﻿import AdminPlaceholder from "@/components/admin/AdminPlaceholder";
+﻿import { AdminShipmentsView } from "@/components/admin/AdminShipmentsView";
 
 export default function Page() {
-  return (
-    <AdminPlaceholder
-      title="Shipments"
-      description="Create and update international shipments and tracking status."
-    />
-  );
+  return <AdminShipmentsView />;
 }

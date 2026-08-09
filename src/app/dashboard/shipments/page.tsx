@@ -1,10 +1,5 @@
-import { PlaceholderSection } from "@/components/dashboard/PlaceholderSection";
+import { ShipmentsList } from "@/components/dashboard/ShipmentsList";
 
-export default function ShipmentsPage() {
-  return (
-    <PlaceholderSection
-      title="Shipments"
-      description="View active and past international shipments, tracking numbers, and delivery status updates."
-    />
-  );
+export default function Page() {
+  return <ShipmentsList />;
 }

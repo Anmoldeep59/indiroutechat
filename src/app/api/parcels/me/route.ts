@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   const { data, error } = await auth.db
     .from("parcels")
     .select(
-      "id, carrier, inbound_tracking_number, sender_name, weight_kg, received_at, status, created_at",
+      "id, reference_code, description, carrier, inbound_tracking_number, sender_name, weight_kg, length_cm, width_cm, height_cm, photo_url, received_at, status, created_at",
     )
     .eq("profile_id", auth.profile.id)
     .order("received_at", { ascending: false, nullsFirst: false })

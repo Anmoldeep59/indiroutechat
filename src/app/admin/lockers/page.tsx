@@ -1,10 +1,5 @@
-﻿import AdminPlaceholder from "@/components/admin/AdminPlaceholder";
+﻿import { AdminLockerSearch } from "@/components/admin/AdminLockerSearch";
 
 export default function Page() {
-  return (
-    <AdminPlaceholder
-      title="Lockers"
-      description="Assign and manage IndiRoute warehouse locker addresses."
-    />
-  );
+  return <AdminLockerSearch />;
 }
