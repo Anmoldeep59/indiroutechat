@@ -4,7 +4,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { useAuthState } from "@/hooks/useAuthState";
-import { supabase } from "@/lib/supabase";
 
 export function AdminGate({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -32,29 +31,42 @@ export function AdminGate({ children }: { children: ReactNode }) {
       setCheckingRole(true);
       setRoleError(null);
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, role")
-        .eq("firebase_uid", user.uid)
-        .maybeSingle();
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch("/api/admin/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          ok?: boolean;
+          error?: string;
+        } | null;
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      if (error) {
-        setRoleError(
-          "Unable to verify admin access. Confirm Supabase is configured and your profile exists.",
-        );
+        if (response.status === 403) {
+          setIsAdmin(false);
+          setCheckingRole(false);
+          router.replace("/dashboard");
+          return;
+        }
+
+        if (!response.ok || !payload?.ok) {
+          setRoleError(
+            payload?.error ||
+              "Unable to verify admin access. Confirm Firebase Admin + Supabase service role keys are set, and your profile role is admin.",
+          );
+          setIsAdmin(false);
+          setCheckingRole(false);
+          return;
+        }
+
+        setIsAdmin(true);
+        setCheckingRole(false);
+      } catch {
+        if (cancelled) return;
+        setRoleError("Unable to verify admin access.");
         setIsAdmin(false);
         setCheckingRole(false);
-        return;
-      }
-
-      const adminRole = data?.role === "admin";
-      setIsAdmin(adminRole);
-      setCheckingRole(false);
-
-      if (!adminRole) {
-        router.replace("/dashboard");
       }
     }
 

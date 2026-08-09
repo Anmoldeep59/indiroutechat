@@ -44,6 +44,12 @@ export function getFirebaseAuthErrorMessage(
       return "Network error. Check your connection and try again.";
     case "auth/operation-not-allowed":
       return "This sign-in method is not enabled. Please contact support.";
+    case "auth/requires-recent-login":
+      return "For security, sign in again and retry this action.";
+    case "auth/wrong-password":
+      return "Current password is incorrect.";
+    case "auth/email-already-in-use":
+      return "That email is already used by another account.";
     default:
       return fallback;
   }

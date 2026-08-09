@@ -127,7 +127,7 @@ export function QuoteResults({
                   <p className="mt-2 text-sm text-brand-muted">
                     Estimated delivery:{" "}
                     <span className="font-medium text-brand">
-                      {option.estimatedDelivery}
+                      {option.estimatedDelivery || "Business days TBA"}
                     </span>
                   </p>
                   <p className="mt-1 text-sm text-brand-muted">

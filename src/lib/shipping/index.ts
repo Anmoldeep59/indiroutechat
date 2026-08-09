@@ -4,6 +4,7 @@ export * from "./defaults";
 export * from "./india-post";
 export * from "./money";
 export * from "./packing";
+export * from "./pg-store";
 export * from "./pricing";
 export * from "./quote";
 export * from "./quote-builder";

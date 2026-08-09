@@ -3,10 +3,73 @@ import { requireAdminUser } from "@/lib/auth-server";
 import { getCountryName, resolveCountry } from "@/lib/shipping/countries";
 import { calculateCustomerPrice } from "@/lib/shipping/pricing";
 import {
+  deleteAramexBaseRatePg,
+  hasDatabaseUrl,
+  insertAramexBaseRatePg,
+  listAramexBaseRatesPg,
+  loadQuoteContextFromPg,
+} from "@/lib/shipping/pg-store";
+import {
   loadFeeSlabSets,
   loadMarginBrackets,
   loadShippingSettings,
 } from "@/lib/shipping/settings";
+
+function mapPricedRows(
+  data: Array<Record<string, unknown>>,
+  settings: Awaited<ReturnType<typeof loadShippingSettings>>,
+  feeSlabs: Awaited<ReturnType<typeof loadFeeSlabSets>>,
+  marginBrackets: Awaited<ReturnType<typeof loadMarginBrackets>>,
+) {
+  return data.map((row) => {
+    const base = Number(row.base_aramex_rate);
+    const minWeightKg = Number(row.min_weight_kg);
+    const maxWeightKg =
+      row.max_weight_kg == null ? null : Number(row.max_weight_kg);
+    const midWeight =
+      maxWeightKg == null ? minWeightKg : (minWeightKg + maxWeightKg) / 2;
+
+    let priced = null;
+    if (row.active !== false) {
+      try {
+        priced = calculateCustomerPrice(
+          base,
+          midWeight,
+          settings,
+          feeSlabs,
+          marginBrackets,
+        );
+      } catch {
+        priced = null;
+      }
+    }
+
+    return {
+      id: row.id,
+      countryCode: row.country_code,
+      countryName: row.country_name,
+      customerServiceTier: row.service_tier,
+      sourceServiceName: "Aramex base (admin table)",
+      sourceServiceId: null,
+      sourceSla: row.source_sla ?? null,
+      weightSlabKg: midWeight,
+      minWeightKg,
+      maxWeightKg,
+      sourceRate: base,
+      baseAramexRate: base,
+      fuelCharge: priced?.aramexFuelSurcharge ?? null,
+      aramexTransportCost: priced?.aramexTransportCost ?? null,
+      shippingCharge: priced?.indiRouteTransportPrice ?? null,
+      handlingFee: priced?.handlingFee ?? null,
+      serviceFee: priced?.serviceFee ?? null,
+      packingFee: priced?.packingFee ?? null,
+      finalCustomerPrice: priced?.finalPrice ?? null,
+      blockedIndiaPost: false,
+      active: Boolean(row.active),
+      updatedAt: row.updated_at ?? null,
+    };
+  });
+}
 
 export async function GET(request: Request) {
   const auth = await requireAdminUser(request);
@@ -33,66 +96,47 @@ export async function GET(request: Request) {
   }
 
   const { data, error } = await query;
-  if (error) {
+
+  if (!error) {
+    const settings = await loadShippingSettings(auth.db);
+    const feeSlabs = await loadFeeSlabSets(auth.db);
+    const marginBrackets = await loadMarginBrackets(auth.db);
+    return NextResponse.json({
+      rates: mapPricedRows(data ?? [], settings, feeSlabs, marginBrackets),
+      settings,
+    });
+  }
+
+  if (!hasDatabaseUrl()) {
     return NextResponse.json(
-      { error: "Unable to load Aramex base rates. Run migration 008." },
+      { error: "Unable to load Aramex base rates. Run migration 008/010." },
       { status: 500 },
     );
   }
 
-  const settings = await loadShippingSettings(auth.db);
-  const feeSlabs = await loadFeeSlabSets(auth.db);
-  const marginBrackets = await loadMarginBrackets(auth.db);
-
-  const rates = (data ?? []).map((row) => {
-    const base = Number(row.base_aramex_rate);
-    const midWeight =
-      row.max_weight_kg == null
-        ? Number(row.min_weight_kg)
-        : (Number(row.min_weight_kg) + Number(row.max_weight_kg)) / 2;
-
-    let priced = null;
-    if (row.active) {
-      try {
-        priced = calculateCustomerPrice(
-          base,
-          midWeight,
-          settings,
-          feeSlabs,
-          marginBrackets,
-        );
-      } catch {
-        priced = null;
-      }
-    }
-
-    return {
-      id: row.id,
-      countryCode: row.country_code,
-      countryName: row.country_name,
-      customerServiceTier: row.service_tier,
-      sourceServiceName: "Aramex base (admin table)",
-      sourceServiceId: null,
-      sourceSla: row.source_sla,
-      weightSlabKg: midWeight,
-      minWeightKg: row.min_weight_kg,
-      maxWeightKg: row.max_weight_kg,
-      sourceRate: base,
-      baseAramexRate: base,
-      fuelCharge: priced?.aramexFuelSurcharge ?? null,
-      aramexTransportCost: priced?.aramexTransportCost ?? null,
-      shippingCharge: priced?.indiRouteTransportPrice ?? null,
-      handlingFee: priced?.handlingFee ?? null,
-      serviceFee: priced?.serviceFee ?? null,
-      packingFee: priced?.packingFee ?? null,
-      finalCustomerPrice: priced?.finalPrice ?? null,
-      blockedIndiaPost: false,
-      active: row.active,
-      updatedAt: row.updated_at,
-    };
-  });
-
-  return NextResponse.json({ rates, settings });
+  try {
+    const rows = await listAramexBaseRatesPg({
+      countryCode: countryCode || undefined,
+      tier,
+      limit,
+    });
+    const context = await loadQuoteContextFromPg(countryCode || "AU");
+    return NextResponse.json({
+      rates: mapPricedRows(
+        rows as Array<Record<string, unknown>>,
+        context.settings,
+        context.feeSlabs,
+        context.marginBrackets,
+      ),
+      settings: context.settings,
+    });
+  } catch (pgError) {
+    console.error("[admin/shipping/rates] pg fallback failed", pgError);
+    return NextResponse.json(
+      { error: "Unable to load Aramex base rates." },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -128,6 +172,10 @@ export async function POST(request: Request) {
   const tier = body.serviceTier === "economy" ? "economy" : "standard";
   const base = Number(body.baseAramexRate);
   const minWeight = Number(body.minWeightKg);
+  const maxWeight =
+    body.maxWeightKg == null || Number.isNaN(Number(body.maxWeightKg))
+      ? null
+      : Number(body.maxWeightKg);
 
   if (!countryCode || !Number.isFinite(base) || base < 0 || !Number.isFinite(minWeight)) {
     return NextResponse.json(
@@ -143,10 +191,7 @@ export async function POST(request: Request) {
       country_name: countryName,
       service_tier: tier,
       min_weight_kg: minWeight,
-      max_weight_kg:
-        body.maxWeightKg == null || Number.isNaN(Number(body.maxWeightKg))
-          ? null
-          : Number(body.maxWeightKg),
+      max_weight_kg: maxWeight,
       base_aramex_rate: base,
       currency: body.currency || "INR",
       source_sla: body.sourceSla?.trim() || null,
@@ -155,14 +200,37 @@ export async function POST(request: Request) {
     .select("id")
     .single();
 
-  if (error || !data) {
+  if (!error && data) {
+    return NextResponse.json({ ok: true, id: data.id }, { status: 201 });
+  }
+
+  if (!hasDatabaseUrl()) {
     return NextResponse.json(
       { error: error?.message || "Unable to save base rate." },
       { status: 500 },
     );
   }
 
-  return NextResponse.json({ ok: true, id: data.id }, { status: 201 });
+  try {
+    const id = await insertAramexBaseRatePg({
+      countryCode,
+      countryName,
+      serviceTier: tier,
+      minWeightKg: minWeight,
+      maxWeightKg: maxWeight,
+      baseAramexRate: base,
+      currency: body.currency || "INR",
+      sourceSla: body.sourceSla?.trim() || null,
+      active: body.active !== false,
+    });
+    return NextResponse.json({ ok: true, id }, { status: 201 });
+  } catch (pgError) {
+    console.error("[admin/shipping/rates] pg insert failed", pgError);
+    return NextResponse.json(
+      { error: "Unable to save base rate." },
+      { status: 500 },
+    );
+  }
 }
 
 export async function DELETE(request: Request) {
@@ -175,8 +243,19 @@ export async function DELETE(request: Request) {
   }
 
   const { error } = await auth.db.from("aramex_base_rates").delete().eq("id", id);
-  if (error) {
+  if (!error) {
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!hasDatabaseUrl()) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+
+  try {
+    await deleteAramexBaseRatePg(id);
+    return NextResponse.json({ ok: true });
+  } catch (pgError) {
+    console.error("[admin/shipping/rates] pg delete failed", pgError);
+    return NextResponse.json({ error: "Unable to delete base rate." }, { status: 500 });
+  }
 }

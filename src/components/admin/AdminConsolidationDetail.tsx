@@ -242,8 +242,9 @@ export function AdminConsolidationDetail({ requestId }: { requestId: string }) {
             <input name="packingNotes" defaultValue={detail.packing_notes ?? ""} className={fieldClassName} />
           </div>
           <div>
-            <label className="text-sm font-semibold text-brand">IndiRoute fee override (₹)</label>
+            <label className="text-sm font-semibold text-brand">Repacking fee override (₹)</label>
             <input name="packingFeeOverride" type="number" step="1" defaultValue={detail.packing_fee_override ?? ""} className={fieldClassName} />
+            <p className="text-xs text-brand-muted">Overrides repacking only. Handling and service fees still apply from weight slabs.</p>
           </div>
         </div>
         <button

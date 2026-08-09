@@ -5,6 +5,7 @@ import {
   toPublicQuote,
   type QuoteBuildContext,
 } from "./quote-builder";
+import { hasDatabaseUrl, loadQuoteContextFromPg } from "./pg-store";
 import {
   loadAramexBaseRates,
   loadEnabledCountryCodes,
@@ -12,7 +13,7 @@ import {
   loadMarginBrackets,
   loadShippingSettings,
 } from "./settings";
-import type { QuoteRequestInput, QuoteResult } from "./types";
+import type { AdminTierQuote, QuoteRequestInput, QuoteResult } from "./types";
 
 export { QuoteBuildError, toPublicQuote };
 
@@ -29,17 +30,36 @@ export async function createShippingQuote(
     packingFeeOverride?: number | null;
     indiRouteFeeOverride?: number | null;
   },
-): Promise<QuoteResult & { adminOptions?: QuoteResult["options"] }> {
+): Promise<QuoteResult & { adminOptions?: AdminTierQuote[] }> {
   const packingOverride =
     options?.packingFeeOverride ?? options?.indiRouteFeeOverride ?? null;
 
+  // Prefer DATABASE_URL shipping store when configured (authoritative Aramex tables).
+  if (hasDatabaseUrl()) {
+    try {
+      const context = await loadQuoteContextFromPg(input.countryCode);
+      return buildQuote(
+        input,
+        {
+          ...context,
+          feeOverrides: { packingFeeOverride: packingOverride },
+        },
+        options,
+      );
+    } catch (error) {
+      if (error instanceof QuoteBuildError) throw error;
+      console.error("[shipping/quote] DATABASE_URL quote failed", error);
+      // Fall through to Supabase admin client if available.
+    }
+  }
+
   if (!db) {
     console.warn(
-      "[shipping/quote] Supabase admin unavailable — cannot load Aramex base rates.",
+      "[shipping/quote] Supabase admin unavailable and DATABASE_URL quote failed/missing.",
     );
     throw new QuoteBuildError(
       "missing_rates",
-      "Shipping quotes require Supabase to be configured (SUPABASE_SERVICE_ROLE_KEY) and Aramex base rates entered in Admin → Shipping Rates.",
+      "Shipping service is temporarily unavailable. Configure DATABASE_URL or SUPABASE_SERVICE_ROLE_KEY.",
     );
   }
 

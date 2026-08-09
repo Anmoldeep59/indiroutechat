@@ -17,6 +17,7 @@ const labelClassName = "block text-sm font-semibold tracking-tight text-brand";
 
 export function DashboardShippingCalculator() {
   const [countries, setCountries] = useState<CountryOption[]>([]);
+  const [destination, setDestination] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteResult | null>(null);
@@ -30,9 +31,15 @@ export function DashboardShippingCalculator() {
         const payload = (await response.json()) as {
           countries?: CountryOption[];
         };
-        if (!cancelled) setCountries(payload.countries ?? []);
+        if (cancelled) return;
+        const list = payload.countries ?? [];
+        setCountries(list);
+        setDestination((current) => current || list[0]?.code || "");
       } catch {
-        if (!cancelled) setCountries([]);
+        if (!cancelled) {
+          setCountries([]);
+          setError("Unable to load destination countries.");
+        }
       }
     }
     void loadCountries();
@@ -55,7 +62,7 @@ export function DashboardShippingCalculator() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          countryCode: String(form.get("destinationCountry") ?? ""),
+          countryCode: destination || String(form.get("destinationCountry") ?? ""),
           city: String(form.get("destinationCity") ?? ""),
           postcode: String(form.get("postcode") ?? ""),
           actualWeightKg: Number(form.get("weight") ?? 0),
@@ -124,7 +131,8 @@ export function DashboardShippingCalculator() {
               id="destination-country"
               name="destinationCountry"
               required
-              defaultValue={countries[0]?.code ?? ""}
+              value={destination}
+              onChange={(event) => setDestination(event.target.value)}
               className={fieldClassName}
             >
               {countries.length === 0 ? (
@@ -134,6 +142,7 @@ export function DashboardShippingCalculator() {
               ) : null}
               {countries.map((country) => (
                 <option key={country.code} value={country.code}>
+                  {country.flag ? `${country.flag} ` : ""}
                   {country.name}
                 </option>
               ))}

@@ -1,10 +1,5 @@
-import { PlaceholderSection } from "@/components/dashboard/PlaceholderSection";
+import { ProfileAccountForm } from "@/components/dashboard/ProfileAccountForm";
 
 export default function ProfilePage() {
-  return (
-    <PlaceholderSection
-      title="Profile"
-      description="Update your contact details, destination preferences, and account information."
-    />
-  );
+  return <ProfileAccountForm />;
 }

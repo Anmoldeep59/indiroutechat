@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { createUserWithEmailAndPassword, signInWithPopup, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, sendEmailVerification, signInWithPopup, updateProfile } from "firebase/auth";
 import { getFirebaseAuthErrorMessage } from "@/lib/auth-errors";
 import { auth, googleProvider } from "@/lib/firebase";
 import { syncProfileWithServer } from "@/lib/sync-profile";
@@ -179,6 +179,12 @@ export function SignupForm() {
         displayName: `${firstName} ${lastName}`.trim(),
       });
 
+      try {
+        await sendEmailVerification(credential.user);
+      } catch (verifyError) {
+        console.warn("[signup] email verification send failed", verifyError);
+      }
+
       await syncProfileWithServer(credential.user, {
         firstName,
         lastName,
@@ -187,7 +193,7 @@ export function SignupForm() {
       });
 
       setSuccessMessage(
-        "Account created successfully. Redirecting to your dashboard...",
+        "Account created. Check your inbox to verify your email, then continue to your dashboard...",
       );
       router.push("/dashboard");
     } catch (error) {

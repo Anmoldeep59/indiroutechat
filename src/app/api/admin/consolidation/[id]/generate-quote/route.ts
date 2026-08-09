@@ -5,6 +5,7 @@ import {
   toPublicQuoteView,
 } from "@/lib/consolidation-quote";
 import { createNotification } from "@/lib/notifications";
+import { QuoteBuildError } from "@/lib/shipping/quote";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -123,6 +124,18 @@ export async function POST(request: Request, context: RouteContext) {
     });
   } catch (err) {
     console.error("[generate-quote]", err);
+    if (err instanceof QuoteBuildError) {
+      const status =
+        err.code === "pricing_safety"
+          ? 500
+          : err.code === "missing_rates"
+            ? 404
+            : 400;
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status },
+      );
+    }
     return NextResponse.json(
       {
         error:
