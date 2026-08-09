@@ -1,10 +1,5 @@
-﻿import AdminPlaceholder from "@/components/admin/AdminPlaceholder";
+﻿import { ShippingRatesAdmin } from "@/components/admin/ShippingRatesAdmin";
 
 export default function Page() {
-  return (
-    <AdminPlaceholder
-      title="Shipping Rates"
-      description="Configure destination rates used by the shipping calculator."
-    />
-  );
+  return <ShippingRatesAdmin />;
 }

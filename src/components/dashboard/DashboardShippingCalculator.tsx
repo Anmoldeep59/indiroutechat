@@ -1,25 +1,13 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { supabase } from "@/lib/supabase";
+import { QuoteResults } from "@/components/shipping/QuoteResults";
+import type { QuoteResult } from "@/lib/shipping/types";
 
-const countries = [
-  "Australia",
-  "United States",
-  "United Kingdom",
-  "Canada",
-  "New Zealand",
-] as const;
-
-type ShippingRate = {
-  id: string;
-  destination_country: string;
-  service_type: string;
-  min_weight_kg: number;
-  max_weight_kg: number | null;
-  base_rate: number;
-  per_kg_rate: number;
-  currency: string;
+type CountryOption = {
+  code: string;
+  name: string;
+  flag: string;
 };
 
 const fieldClassName =
@@ -28,75 +16,76 @@ const fieldClassName =
 const labelClassName = "block text-sm font-semibold tracking-tight text-brand";
 
 export function DashboardShippingCalculator() {
-  const [rates, setRates] = useState<ShippingRate[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [estimate, setEstimate] = useState<string | null>(null);
-  const [loadingRates, setLoadingRates] = useState(true);
+  const [countries, setCountries] = useState<CountryOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [quote, setQuote] = useState<QuoteResult | null>(null);
+  const [selectedTier, setSelectedTier] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-
-    async function loadRates() {
-      setLoadingRates(true);
-      const { data, error } = await supabase
-        .from("shipping_rates")
-        .select(
-          "id, destination_country, service_type, min_weight_kg, max_weight_kg, base_rate, per_kg_rate, currency",
-        )
-        .eq("is_active", true);
-
-      if (cancelled) return;
-
-      if (error) {
-        setLoadError(
-          "Shipping rates could not be loaded yet. Add Supabase credentials and run the schema migration.",
-        );
-        setRates([]);
-      } else {
-        setLoadError(null);
-        setRates((data as ShippingRate[]) ?? []);
+    async function loadCountries() {
+      try {
+        const response = await fetch("/api/shipping/countries");
+        const payload = (await response.json()) as {
+          countries?: CountryOption[];
+        };
+        if (!cancelled) setCountries(payload.countries ?? []);
+      } catch {
+        if (!cancelled) setCountries([]);
       }
-      setLoadingRates(false);
     }
-
-    void loadRates();
+    void loadCountries();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const country = String(formData.get("destinationCountry") ?? "");
-    const weight = Number(formData.get("weight") ?? 0);
-    const serviceType = String(formData.get("shippingSpeed") ?? "economy");
+    setLoading(true);
+    setError(null);
+    setQuote(null);
+    setSelectedTier(null);
 
-    const match = rates.find(
-      (rate) =>
-        rate.destination_country === country &&
-        rate.service_type === serviceType &&
-        weight >= Number(rate.min_weight_kg) &&
-        (rate.max_weight_kg == null || weight <= Number(rate.max_weight_kg)),
-    );
+    const form = new FormData(event.currentTarget);
 
-    if (!match) {
-      setEstimate(
-        "No configured rate matched this destination, weight, and service type yet.",
-      );
-      return;
+    try {
+      const response = await fetch("/api/shipping/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          countryCode: String(form.get("destinationCountry") ?? ""),
+          city: String(form.get("destinationCity") ?? ""),
+          postcode: String(form.get("postcode") ?? ""),
+          actualWeightKg: Number(form.get("weight") ?? 0),
+          lengthCm: Number(form.get("length") ?? 0),
+          widthCm: Number(form.get("width") ?? 0),
+          heightCm: Number(form.get("height") ?? 0),
+          pieces: Number(form.get("pieces") ?? 1),
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        quote?: QuoteResult;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.quote) {
+        setError(payload?.error || "Unable to calculate shipping.");
+        return;
+      }
+
+      setQuote(payload.quote);
+    } catch {
+      setError("Unable to calculate shipping.");
+    } finally {
+      setLoading(false);
     }
-
-    const billableWeight = Math.max(weight, 0);
-    const total =
-      Number(match.base_rate) + billableWeight * Number(match.per_kg_rate);
-    setEstimate(
-      `Estimated shipping: ${match.currency} ${total.toFixed(2)} (${match.service_type})`,
-    );
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <section className="rounded-xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)] sm:p-8">
         <p className="font-display text-xs font-semibold uppercase tracking-[0.14em] text-accent">
           Shipping Calculator
@@ -105,8 +94,8 @@ export function DashboardShippingCalculator() {
           Estimate Your Shipping
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-brand-muted sm:text-base">
-          Rates are loaded from Supabase configuration, not hardcoded into the
-          UI.
+          Prices are calculated server-side from IndiRoute shipping settings.
+          Source courier brands are never shown.
         </p>
       </section>
 
@@ -114,13 +103,19 @@ export function DashboardShippingCalculator() {
         onSubmit={handleSubmit}
         className="rounded-xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(12,35,64,0.04)] sm:p-8"
       >
-        {loadError ? (
-          <p className="mb-5 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            {loadError}
-          </p>
-        ) : null}
-
         <div className="grid gap-5 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label htmlFor="origin" className={labelClassName}>
+              Origin
+            </label>
+            <input
+              id="origin"
+              value="India"
+              readOnly
+              className={`${fieldClassName} cursor-not-allowed text-brand-muted`}
+            />
+          </div>
+
           <div className="sm:col-span-2">
             <label htmlFor="destination-country" className={labelClassName}>
               Destination Country
@@ -128,80 +123,134 @@ export function DashboardShippingCalculator() {
             <select
               id="destination-country"
               name="destinationCountry"
-              defaultValue="Australia"
+              required
+              defaultValue={countries[0]?.code ?? ""}
               className={fieldClassName}
             >
+              {countries.length === 0 ? (
+                <option value="" disabled>
+                  Loading countries…
+                </option>
+              ) : null}
               {countries.map((country) => (
-                <option key={country} value={country}>
-                  {country}
+                <option key={country.code} value={country.code}>
+                  {country.name}
                 </option>
               ))}
             </select>
           </div>
+
+          <div>
+            <label htmlFor="destination-city" className={labelClassName}>
+              Destination City
+            </label>
+            <input
+              id="destination-city"
+              name="destinationCity"
+              className={fieldClassName}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="postcode" className={labelClassName}>
+              Postcode
+            </label>
+            <input id="postcode" name="postcode" className={fieldClassName} />
+          </div>
+
           <div>
             <label htmlFor="weight" className={labelClassName}>
-              Parcel Weight (kg)
+              Actual Weight (kg)
             </label>
             <input
               id="weight"
               name="weight"
               type="number"
-              min="0"
-              step="0.1"
+              min="0.01"
+              step="0.01"
+              defaultValue="1"
+              required
+              className={fieldClassName}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="pieces" className={labelClassName}>
+              Number of Parcels
+            </label>
+            <input
+              id="pieces"
+              name="pieces"
+              type="number"
+              min="1"
               defaultValue="1"
               className={fieldClassName}
             />
           </div>
+
           <div>
             <label htmlFor="length" className={labelClassName}>
               Length (cm)
             </label>
-            <input id="length" name="length" type="number" min="0" className={fieldClassName} />
+            <input
+              id="length"
+              name="length"
+              type="number"
+              min="0"
+              step="0.1"
+              className={fieldClassName}
+            />
           </div>
           <div>
             <label htmlFor="width" className={labelClassName}>
               Width (cm)
             </label>
-            <input id="width" name="width" type="number" min="0" className={fieldClassName} />
+            <input
+              id="width"
+              name="width"
+              type="number"
+              min="0"
+              step="0.1"
+              className={fieldClassName}
+            />
           </div>
           <div>
             <label htmlFor="height" className={labelClassName}>
               Height (cm)
             </label>
-            <input id="height" name="height" type="number" min="0" className={fieldClassName} />
+            <input
+              id="height"
+              name="height"
+              type="number"
+              min="0"
+              step="0.1"
+              className={fieldClassName}
+            />
           </div>
-          <fieldset className="sm:col-span-2">
-            <legend className={labelClassName}>Shipping Speed</legend>
-            <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
-              <label className="flex min-h-11 items-center gap-3 rounded-md border border-border bg-background px-3.5">
-                <input
-                  type="radio"
-                  name="shippingSpeed"
-                  value="economy"
-                  defaultChecked
-                />
-                <span className="text-sm font-medium text-brand">Economy</span>
-              </label>
-              <label className="flex min-h-11 items-center gap-3 rounded-md border border-border bg-background px-3.5">
-                <input type="radio" name="shippingSpeed" value="express" />
-                <span className="text-sm font-medium text-brand">Express</span>
-              </label>
-            </div>
-          </fieldset>
         </div>
 
         <button
           type="submit"
-          disabled={loadingRates}
+          disabled={loading}
           className="mt-7 inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
         >
-          Calculate Shipping
+          {loading ? "Calculating…" : "Calculate Shipping"}
         </button>
 
-        {estimate ? (
-          <p className="mt-5 rounded-md border border-accent/25 bg-accent/5 px-4 py-3 text-sm text-brand">
-            {estimate}
+        {error ? (
+          <p className="mt-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+            {error}
           </p>
+        ) : null}
+
+        {quote ? (
+          <div className="mt-6">
+            <QuoteResults
+              quote={quote}
+              selectedTier={selectedTier}
+              onSelect={setSelectedTier}
+            />
+          </div>
         ) : null}
       </form>
     </div>

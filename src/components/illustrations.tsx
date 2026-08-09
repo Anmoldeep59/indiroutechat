@@ -354,8 +354,8 @@ export function PostalStamp({ className = "" }: IllustrationProps) {
         transform="rotate(-8 47 55)"
       />
       <path d="M26 74c14-8 40-8 58-2" stroke="#0c2340" strokeOpacity="0.35" strokeWidth="1.5" fill="none" strokeDasharray="3 4" />
-      <text x="55" y="104" textAnchor="middle" fill="#0c2340" fillOpacity="0.7" fontSize="9" fontWeight="700" letterSpacing="2">
-        INDIA POST
+      <text x="55" y="104" textAnchor="middle" fill="#0c2340" fillOpacity="0.7" fontSize="9" fontWeight="700" letterSpacing="1.5">
+        INDIROUTE
       </text>
       <text x="55" y="116" textAnchor="middle" fill="#e86a17" fontSize="7" fontWeight="600" letterSpacing="1.5">
         AIR MAIL · हवाई डाक
